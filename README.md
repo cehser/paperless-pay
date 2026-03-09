@@ -53,14 +53,13 @@ cp pay-poc/.env.sample pay-poc/.env
 docker compose \
   -f docker-compose.yml \
   -f pay-poc/docker-compose.pay-poc.override.yml \
-  --env-file pay-poc/.env \
   up -d --build cookie-poc
 ```
 
 > **Was passiert hier?**
 > - `-f docker-compose.yml` → dein bestehender Paperless-Stack
 > - `-f pay-poc/docker-compose.pay-poc.override.yml` → fügt den `cookie-poc` Service additiv hinzu
-> - `--env-file pay-poc/.env` → lädt die PoC-spezifischen ENV-Variablen
+> - Die ENV-Variablen werden via `env_file` direkt aus `pay-poc/.env` geladen (steht in der Compose-Datei).
 > - Docker Compose merged beide Files. Der `cookie-poc` Service teilt automatisch das default-Netzwerk des Paperless-Stacks und kann `paperless:8000` direkt erreichen.
 
 ### Logs prüfen

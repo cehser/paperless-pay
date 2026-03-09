@@ -74,7 +74,7 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 # Headers die wir 1:1 forwarden (lowercase)
-_FORWARD_HEADERS = {"cookie", "user-agent", "accept"}
+_FORWARD_HEADERS = {"cookie", "user-agent"}
 
 
 def _build_upstream_headers(request: Request) -> dict[str, str]:
@@ -84,6 +84,8 @@ def _build_upstream_headers(request: Request) -> dict[str, str]:
         val = request.headers.get(key)
         if val is not None:
             out[key] = val
+    # Accept immer auf JSON setzen, damit Paperless nicht die HTML-Browsable-API liefert
+    out["accept"] = "application/json"
     return out
 
 
