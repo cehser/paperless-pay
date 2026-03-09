@@ -1,0 +1,32 @@
+# ==========================================================================
+# cookie-passthrough-check PoC  (additiv zu deiner paperless-ngx compose)
+# ==========================================================================
+#
+# Dieses Repo als Unterverzeichnis "pay-poc/" in dein
+# Paperless-Compose-Verzeichnis klonen, dann starten mit:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f pay-poc/docker-compose.pay-poc.override.yml \
+#     --env-file pay-poc/.env \
+#     up -d --build cookie-poc
+#
+# Das default-Netzwerk des Paperless-Stacks wird automatisch geteilt.
+# Der build-context ist relativ zu dieser Datei (→ pay-poc/).
+# ==========================================================================
+
+services:
+  cookie-poc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${COOKIE_POC_PORT:-8081}:8080"
+    environment:
+      # Paperless ist im default-Netzwerk unter seinem Service-Namen
+      # erreichbar. Passe den Hostnamen an, falls dein Paperless-Service
+      # anders heißt (z.B. "paperless-webserver").
+      PAPERLESS_BASE_URL: ${PAPERLESS_BASE_URL:-http://paperless:8000}
+      APP_BASE_PATH: ${APP_BASE_PATH:-/qr-poc}
+      DEBUG_UPSTREAM: ${DEBUG_UPSTREAM:-false}
