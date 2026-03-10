@@ -43,11 +43,17 @@ def _extract_cf_value(custom_fields: list[dict], field_id: int) -> Any:
 
 
 def _parse_decimal(value: Any) -> Decimal | None:
-    """Parst einen Wert sicher in Decimal."""
+    """Parst einen Wert sicher in Decimal. Entfernt Währungspräfixe wie 'EUR'."""
     if value is None:
         return None
     try:
-        return Decimal(str(value))
+        raw = str(value).strip()
+        # Währungspräfix entfernen (z.B. "EUR693.12" → "693.12")
+        for prefix in ("EUR", "USD", "GBP", "CHF", "€", "$", "£"):
+            if raw.upper().startswith(prefix):
+                raw = raw[len(prefix):].strip()
+                break
+        return Decimal(raw)
     except (InvalidOperation, ValueError, TypeError):
         logger.warning("Konnte Betrag nicht parsen: %r", value)
         return None

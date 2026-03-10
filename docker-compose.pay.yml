@@ -2,19 +2,19 @@
 # paperless-pay  (additiv zu deiner paperless-ngx compose)
 # ==========================================================================
 #
-# Dieses Repo als Unterverzeichnis "pay-poc/" in dein
+# Dieses Repo als Unterverzeichnis "pay/" in dein
 # Paperless-Compose-Verzeichnis klonen, dann starten mit:
 #
 #   docker compose \
 #     -f docker-compose.yml \
-#     -f pay-poc/docker-compose.pay-poc.override.yml \
-#     up -d --build cookie-poc
+#     -f pay/docker-compose.pay.yml \
+#     up -d --build pay
 #
 # Das default-Netzwerk des Paperless-Stacks wird automatisch geteilt.
 # ==========================================================================
 
 services:
-  cookie-poc:
+  pay:
     build:
       context: ./pay
     env_file: pay/.env
