@@ -17,6 +17,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from config import settings
 from paperless_client import build_payment_info, mark_as_paid
 from qr import generate_dummy_svg, generate_qr_svg
+from verwendungszweck import render_verwendungszweck
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -93,6 +94,9 @@ def _render_page(
     error: str = "",
 ) -> str:
     """Rendert die Dokument-Zahlungsseite als HTML."""
+
+    # Verwendungszweck mit Template rendern
+    verwendungszweck_display = render_verwendungszweck(info)
 
     # Zahlungsfelder
     if info.bezahlt:
@@ -197,7 +201,7 @@ def _render_page(
                     </div>
                     <div class="field {field_class}">
                         <label>Verwendungszweck</label>
-                        <div class="value">{info.verwendungszweck or '–'}</div>
+                        <div class="value">{verwendungszweck_display or '–'}</div>
                     </div>
                 </div>
                 {button_html}

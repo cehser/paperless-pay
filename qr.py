@@ -14,6 +14,7 @@ import segno
 
 from config import settings
 from models import PaymentInfo
+from verwendungszweck import render_verwendungszweck
 
 logger = logging.getLogger("paperless-pay.qr")
 
@@ -31,18 +32,7 @@ def _truncate(value: str, max_len: int) -> str:
 
 def _render_verwendungszweck(info: PaymentInfo) -> str:
     """Wendet das Verwendungszweck-Template an."""
-    try:
-        result = settings.verwendungszweck_template.format(
-            verwendungszweck=info.verwendungszweck,
-            title=info.title,
-            correspondent=info.correspondent_name,
-            doc_id=info.doc_id,
-        )
-    except (KeyError, IndexError) as exc:
-        logger.warning("Verwendungszweck-Template fehlerhaft: %s – Fallback auf raw", exc)
-        result = info.verwendungszweck
-
-    return _truncate(result, _MAX_REMITTANCE)
+    return render_verwendungszweck(info)
 
 
 def build_epc_payload(info: PaymentInfo) -> str:
