@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     # --- Custom Field IDs (aus Paperless Admin → Custom Fields) ---------------
     cf_iban: int
-    cf_bic: int
+    cf_bic: int | None = None  # optional – BIC ist bei SEPA nicht immer nötig
     cf_betrag: int
     cf_verwendungszweck: int
     cf_bezahlt: int

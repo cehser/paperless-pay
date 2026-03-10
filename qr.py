@@ -57,7 +57,7 @@ def build_epc_payload(info: PaymentInfo) -> str:
 
     name = _truncate(info.correspondent_name, _MAX_NAME)
     iban = _truncate(info.iban.replace(" ", ""), _MAX_IBAN)
-    bic = _truncate(info.bic.replace(" ", ""), _MAX_BIC)
+    bic = _truncate(info.bic.replace(" ", ""), _MAX_BIC) if info.bic else ""
     amount = f"EUR{info.betrag:.2f}"
     remittance = _render_verwendungszweck(info)
 

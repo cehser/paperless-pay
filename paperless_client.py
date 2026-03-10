@@ -19,6 +19,17 @@ logger = logging.getLogger("paperless-pay.client")
 # Header-Handling
 # ---------------------------------------------------------------------------
 
+def _extract_csrf_token(cookie: str | None) -> str | None:
+    """Extrahiert das CSRF-Token aus dem Cookie-Header."""
+    if not cookie:
+        return None
+    for part in cookie.split(";"):
+        part = part.strip()
+        if part.startswith("csrftoken="):
+            return part.split("=", 1)[1]
+    return None
+
+
 def build_upstream_headers(cookie: str | None, user_agent: str | None = None) -> dict[str, str]:
     """Baut Header für den Upstream-Request. Cookie 1:1, Accept immer JSON."""
     headers: dict[str, str] = {"accept": "application/json"}
@@ -26,6 +37,15 @@ def build_upstream_headers(cookie: str | None, user_agent: str | None = None) ->
         headers["cookie"] = cookie
     if user_agent:
         headers["user-agent"] = user_agent
+    return headers
+
+
+def build_upstream_headers_write(cookie: str | None, user_agent: str | None = None) -> dict[str, str]:
+    """Baut Header für schreibende Upstream-Requests (PATCH/POST). Inkl. CSRF-Token."""
+    headers = build_upstream_headers(cookie, user_agent)
+    csrf = _extract_csrf_token(cookie)
+    if csrf:
+        headers["X-CSRFToken"] = csrf
     return headers
 
 
@@ -148,7 +168,7 @@ async def build_payment_info(
         correspondent_id=correspondent_id,
         correspondent_name=correspondent_name,
         iban=_extract_cf_value(custom_fields, settings.cf_iban) or "",
-        bic=_extract_cf_value(custom_fields, settings.cf_bic) or "",
+        bic=(_extract_cf_value(custom_fields, settings.cf_bic) or "") if settings.cf_bic else "",
         betrag=_parse_decimal(_extract_cf_value(custom_fields, settings.cf_betrag)),
         verwendungszweck=_extract_cf_value(custom_fields, settings.cf_verwendungszweck) or "",
         bezahlt=_parse_bool(_extract_cf_value(custom_fields, settings.cf_bezahlt)),
@@ -168,9 +188,7 @@ async def mark_as_paid(
     Gibt den HTTP-Statuscode zurück.
     """
     url = f"{settings.paperless_base_url.rstrip('/')}/api/documents/{doc_id}/"
-    headers = build_upstream_headers(cookie, user_agent)
-
-    # Custom Fields aktualisieren: Bezahlt-Feld auf true setzen,
+    headers = build_upstream_headers_write(cookie, user_agent)
     # alle anderen Felder beibehalten
     updated_fields = []
     bezahlt_found = False

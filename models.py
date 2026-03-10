@@ -31,7 +31,6 @@ class PaymentInfo:
         """True wenn alle Pflichtfelder für EPC-QR vorhanden und nicht bezahlt."""
         return bool(
             self.iban
-            and self.bic
             and self.betrag
             and self.betrag > 0
             and self.correspondent_name
@@ -44,8 +43,6 @@ class PaymentInfo:
         missing = []
         if not self.iban:
             missing.append("IBAN")
-        if not self.bic:
-            missing.append("BIC")
         if not self.betrag or self.betrag <= 0:
             missing.append("Betrag")
         if not self.correspondent_name:
