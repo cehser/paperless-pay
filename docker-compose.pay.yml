@@ -1,5 +1,5 @@
 # ==========================================================================
-# cookie-passthrough-check PoC  (additiv zu deiner paperless-ngx compose)
+# paperless-pay  (additiv zu deiner paperless-ngx compose)
 # ==========================================================================
 #
 # Dieses Repo als Unterverzeichnis "pay-poc/" in dein
@@ -8,18 +8,16 @@
 #   docker compose \
 #     -f docker-compose.yml \
 #     -f pay-poc/docker-compose.pay-poc.override.yml \
-#     --env-file pay-poc/.env \
 #     up -d --build cookie-poc
 #
 # Das default-Netzwerk des Paperless-Stacks wird automatisch geteilt.
-# Der build-context ist relativ zu dieser Datei (→ pay-poc/).
 # ==========================================================================
 
 services:
   cookie-poc:
     build:
-      context: pay-poc/.
-    env_file: pay-poc/.env
+      context: ./pay
+    env_file: pay/.env
     ports:
       - "${COOKIE_POC_PORT:-8081}:8080"
     restart: unless-stopped
