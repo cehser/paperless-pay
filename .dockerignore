@@ -1,0 +1,30 @@
+# Build-Artefakte
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Git / IDE
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+
+# Docs (nicht im Image nötig)
+README.md
+PLAN.md
+LICENSE
+*.md
+
+# Compose + nginx (Beispieldateien, nicht Teil der App)
+docker-compose*.yml
+nginx.example.conf
+Dockerfile*
+.dockerignore

@@ -216,3 +216,53 @@ async def mark_as_paid(
 
     resp.raise_for_status()
     return resp.status_code
+
+
+async def update_custom_fields(
+    client: httpx.AsyncClient,
+    doc_id: int,
+    current_custom_fields: list[dict],
+    updates: dict[int, Any],
+    cookie: str | None,
+    user_agent: str | None = None,
+) -> int:
+    """
+    Aktualisiert beliebige Custom Fields via PATCH.
+
+    Args:
+        updates: Dict von {field_id: new_value}
+
+    Gibt den HTTP-Statuscode zurück.
+    """
+    url = f"{settings.paperless_base_url.rstrip('/')}/api/documents/{doc_id}/"
+    headers = build_upstream_headers_write(cookie, user_agent)
+
+    updated_fields = []
+    updated_ids: set[int] = set()
+
+    for cf in current_custom_fields:
+        fid = cf.get("field")
+        if fid in updates:
+            updated_fields.append({"field": fid, "value": updates[fid]})
+            updated_ids.add(fid)
+        else:
+            updated_fields.append(cf)
+
+    # Felder hinzufügen, die noch nicht existierten
+    for fid, val in updates.items():
+        if fid not in updated_ids:
+            updated_fields.append({"field": fid, "value": val})
+
+    payload = {"custom_fields": updated_fields}
+
+    logger.info("→ PATCH %s (update fields: %s)", url, list(updates.keys()))
+    resp = await client.patch(
+        url, headers=headers, json=payload, follow_redirects=True
+    )
+
+    logger.info("← %s status=%d", url, resp.status_code)
+    if settings.debug_upstream:
+        logger.debug("← body: %s", resp.text[:500])
+
+    resp.raise_for_status()
+    return resp.status_code

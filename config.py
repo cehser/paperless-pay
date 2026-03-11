@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     cf_verwendungszweck: int
     cf_bezahlt: int
 
+    # --- Feature Switches ------------------------------------------------------
+    enable_edit: bool = False  # Experimentell: Felder editierbar machen
+
     # --- Templating -----------------------------------------------------------
     # Verfügbare Variablen: {verwendungszweck}, {title}, {correspondent}, {doc_id}
     verwendungszweck_template: str = "{verwendungszweck}"

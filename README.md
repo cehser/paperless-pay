@@ -1,157 +1,176 @@
-# cookie-passthrough-check
+# paperless-pay
 
-Super-minimaler PoC um zu testen, ob Cookie-Passthrough zur **paperless-ngx** API funktioniert.
+SEPA EPC-QR Zahlungsseite für [paperless-ngx](https://github.com/paperless-ngx/paperless-ngx).
 
-## Idee
+Zeigt Zahlungsinformationen, generiert EPC-QR-Codes und ermöglicht das Markieren von Dokumenten als bezahlt – alles über Cookie-Passthrough, kein eigener Auth-Layer.
 
-Du bist im Browser bei Paperless eingeloggt (Session-Cookie gesetzt).
-Der PoC nimmt alle Cookies aus dem eingehenden Request und leitet sie
-serverseitig an Paperless weiter. So siehst du sofort, ob die
-Authentifizierung über Cookie-Forwarding klappt.
+## Features
 
-## Verzeichnisstruktur (Ziel)
+- **EPC-QR-Code** – SEPA Credit Transfer QR-Code (scannbar mit Banking-Apps)
+- **Zahlungsübersicht** – IBAN, BIC, Betrag, Verwendungszweck aus Paperless Custom Fields
+- **PDF-Vorschau** – Dokument-Preview direkt neben den Zahlungsdaten
+- **Als bezahlt markieren** – setzt ein Boolean Custom Field in Paperless
+- **IBAN-Validierung** – via [schwifty](https://github.com/mdomke/schwifty) (ISO 13616)
+- **Feld-Bearbeitung** – experimentell, per Feature Switch (`ENABLE_EDIT=true`)
+- **Link-Worker** – setzt automatisch Pay-Links in ein URL Custom Field für alle Rechnungen
+- **Verwendungszweck-Template** – konfigurierbar mit Variablen
 
-Dieses Repo wird als **Unterverzeichnis** in dein bestehendes
-Paperless-Compose-Projekt geklont. Danach sieht es so aus:
+## Quickstart
 
-```
-/opt/paperless/                         ← dein Paperless-Compose-Verzeichnis
-├── docker-compose.yml                  ← dein bestehender Paperless-Stack
-├── .env                                ← deine bestehende Paperless-ENV
-├── …
-└── pay-poc/                            ← dieses Repo (git clone)
-    ├── docker-compose.pay-poc.override.yml
-    ├── .env.sample
-    ├── Dockerfile
-    ├── main.py
-    ├── requirements.txt
-    ├── nginx.example.conf
-    └── README.md
-```
+### 1. Voraussetzungen
 
-## Setup – Schritt für Schritt
+- Laufende **paperless-ngx** Instanz mit Docker Compose
+- Custom Fields in Paperless angelegt: IBAN, Betrag, Verwendungszweck, Bezahlt (+ optional BIC, Pay-Link)
+- Reverse Proxy (nginx o.ä.) der Cookie-Passthrough ermöglicht
+
+### 2. Compose einrichten
 
 ```bash
-# 1. In dein Paperless-Compose-Verzeichnis wechseln
-cd /opt/paperless            # ← anpassen!
+# Repo als Unterverzeichnis in dein Paperless-Compose-Verzeichnis klonen
+cd /opt/paperless            # ← dein Paperless-Compose-Dir
+git clone https://github.com/eehser/paperless-pay.git pay-poc
 
-# 2. Dieses Repo als Unterverzeichnis klonen
-git clone <REPO_URL> pay-poc
-
-# 3. ENV-Datei aus Sample erzeugen
+# ENV-Datei erstellen
 cp pay-poc/.env.sample pay-poc/.env
-
-# 4. pay-poc/.env prüfen und ggf. anpassen
-#    (Defaults passen, wenn dein Paperless-Service "paperless" heißt
-#     und auf Port 8000 läuft – also der Standard.)
+# → pay-poc/.env anpassen (Custom Field IDs, URLs, etc.)
 ```
 
-## Starten
-
-```bash
-# Aus dem Paperless-Compose-Verzeichnis:
-docker compose \
-  -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay-poc.override.yml \
-  up -d --build cookie-poc
-```
-
-> **Was passiert hier?**
-> - `-f docker-compose.yml` → dein bestehender Paperless-Stack
-> - `-f pay-poc/docker-compose.pay-poc.override.yml` → fügt den `cookie-poc` Service additiv hinzu
-> - Die ENV-Variablen werden via `env_file` direkt aus `pay-poc/.env` geladen (steht in der Compose-Datei).
-> - Docker Compose merged beide Files. Der `cookie-poc` Service teilt automatisch das default-Netzwerk des Paperless-Stacks und kann `paperless:8000` direkt erreichen.
-
-### Logs prüfen
+### 3. Starten
 
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay-poc.override.yml \
-  logs -f cookie-poc
+  -f pay-poc/docker-compose.pay.example.yml \
+  up -d
 ```
 
-### Stoppen (nur den PoC)
+> Das Compose-File `docker-compose.pay.example.yml` ist ein **Beispiel**.
+> Passe es an dein Setup an (Service-Namen, Netzwerke, Ports).
+
+### 4. Testen
+
+1. Im Browser bei Paperless einloggen
+2. Aufrufen: `https://deine-domain.de/pay/doc/123`
+
+## Image
+
+Das Image wird automatisch über GitHub Actions gebaut und auf GHCR publiziert:
+
+```
+ghcr.io/eehser/paperless-pay:latest
+```
+
+### Tags
+
+| Tag | Wann | Beispiel |
+|---|---|---|
+| `latest` | Jeder Push auf `main` | `ghcr.io/eehser/paperless-pay:latest` |
+| `sha-<hash>` | Jeder Push auf `main` | `ghcr.io/eehser/paperless-pay:sha-abc1234` |
+| `v1.2.3` | Git-Tag `v1.2.3` | `ghcr.io/eehser/paperless-pay:v1.2.3` |
+
+### Architectures
+
+`linux/amd64`, `linux/arm64`
+
+### Update
 
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay-poc.override.yml \
-  rm -sf cookie-poc
+  -f pay-poc/docker-compose.pay.example.yml \
+  pull && \
+docker compose \
+  -f docker-compose.yml \
+  -f pay-poc/docker-compose.pay.example.yml \
+  up -d
 ```
 
-## ENV-Variablen (`pay-poc/.env`)
+## Services
 
-| Variable             | Required | Default                    | Beschreibung                                      |
-|----------------------|----------|----------------------------|---------------------------------------------------|
-| `PAPERLESS_BASE_URL` | nein     | `http://paperless:8000`    | URL des Paperless-Service im Docker-Netz          |
-| `APP_BASE_PATH`      | nein     | `/qr-poc`                  | Prefix für alle Routes (für Reverse-Proxy)         |
-| `COOKIE_POC_PORT`    | nein     | `8081`                     | Host-Port des PoC                                 |
-| `DEBUG_UPSTREAM`     | nein     | `false`                    | `1`/`true` → loggt + gibt alle Upstream-Header aus |
+Das Image enthält **zwei Modi** – gesteuert über den `command:` in Compose:
 
-## Routen
+| Service | Command (default) | Beschreibung |
+|---|---|---|
+| **paperless-pay** | `uvicorn main:app ...` (default CMD) | Web-App: Zahlungsseite + QR-Code |
+| **pay-link-worker** | `python -u worker.py` | Polling-Worker: setzt Pay-Links in Custom Fields |
 
-| Methode | Pfad                 | Beschreibung                                 |
-|---------|----------------------|----------------------------------------------|
-| GET     | `/qr-poc/healthz`    | Liveness-Check: `{"ok": true}`               |
-| GET     | `/qr-poc/probe`      | Cookie-Passthrough-Test gegen `/api/`        |
-| GET     | `/qr-poc/doc/{id}`   | Dokument abfragen via `/api/documents/{id}/` |
+## ENV-Variablen
 
-## Testen
+Siehe [.env.sample](.env.sample) für alle Variablen mit Erklärungen.
 
-1. **Im Browser bei Paperless einloggen** (z. B. `https://docs.xy.de`).
-2. **Im gleichen Browser** aufrufen:
+### Web-App
 
-| URL                                  | Erwartet                                     |
-|--------------------------------------|----------------------------------------------|
-| `https://docs.xy.de/qr-poc/healthz` | `{"ok": true}`                               |
-| `https://docs.xy.de/qr-poc/probe`   | `"verdict": "OK (authenticated)"` bei Cookie |
-| `https://docs.xy.de/qr-poc/doc/123` | Dokument-JSON oder `"NOT AUTHENTICATED"`     |
+| Variable | Pflicht | Default | Beschreibung |
+|---|---|---|---|
+| `PAPERLESS_BASE_URL` | | `http://paperless:8000` | Paperless im Docker-Netz |
+| `PAPERLESS_PUBLIC_URL` | | = `PAPERLESS_BASE_URL` | Öffentliche URL für PDF-iframe |
+| `APP_BASE_PATH` | | `/pay` | URL-Prefix für alle Routes |
+| `CF_IBAN` | ✓ | | Custom Field ID: IBAN |
+| `CF_BIC` | | | Custom Field ID: BIC (optional) |
+| `CF_BETRAG` | ✓ | | Custom Field ID: Betrag |
+| `CF_VERWENDUNGSZWECK` | ✓ | | Custom Field ID: Verwendungszweck |
+| `CF_BEZAHLT` | ✓ | | Custom Field ID: Bezahlt (boolean) |
+| `VERWENDUNGSZWECK_TEMPLATE` | | `{verwendungszweck}` | Template mit `{verwendungszweck}`, `{title}`, `{correspondent}`, `{doc_id}` |
+| `ENABLE_EDIT` | | `false` | Experimentell: Felder editierbar machen |
 
-### Beispiel-Response `/probe` (authentifiziert)
+### Link-Worker
 
-```json
-{
-  "upstream_url": "http://paperless:8000/api/",
-  "upstream_status": 200,
-  "authenticated_guess": true,
-  "upstream_headers_subset": { "content-type": "application/json" },
-  "upstream_body_preview": "{\"documents\":\"http://paperless:8000/api/documents/\", ...}",
-  "verdict": "OK (authenticated)"
-}
-```
+| Variable | Pflicht | Default | Beschreibung |
+|---|---|---|---|
+| `PAPERLESS_TOKEN` | ✓ | | API-Token (Paperless Admin → Tokens) |
+| `CF_LINK` | ✓ | | Custom Field ID: Pay-Link (Typ: URL) |
+| `PAY_PUBLIC_URL` | ✓ | | Öffentliche URL, z.B. `https://docs.xy.de/pay` |
+| `WORKER_FILTER` | | `""` | Paperless API Filter, z.B. `document_type__id=3` |
+| `WORKER_INTERVAL` | | `60` | Polling-Intervall in Sekunden |
 
-### Beispiel-Response `/probe` (nicht authentifiziert)
+### API-Token erstellen
 
-```json
-{
-  "upstream_url": "http://paperless:8000/api/",
-  "upstream_status": 403,
-  "authenticated_guess": false,
-  "upstream_headers_subset": { "content-type": "application/json" },
-  "upstream_body_preview": "{\"detail\":\"Authentication credentials were not provided.\"}",
-  "verdict": "NOT AUTHENTICATED"
-}
-```
+1. Paperless Admin → **Tokens** (oder `/admin/authtoken/tokenproxy/`)
+2. Neuen Token für einen Benutzer mit Schreibrechten erstellen
+3. Token in `PAPERLESS_TOKEN` eintragen
 
 ## nginx
 
-Siehe [nginx.example.conf](nginx.example.conf) – der PoC und Paperless
-laufen hinter demselben nginx, damit der Browser die Session-Cookies an
-beide Pfade schickt.
+Siehe [nginx.example.conf](nginx.example.conf) – paperless-pay und Paperless müssen
+hinter demselben Reverse Proxy laufen, damit der Browser die Session-Cookies an beide Pfade sendet.
 
-## Aufräumen
+## Routen
+
+| Methode | Pfad | Beschreibung |
+|---|---|---|
+| GET | `/pay/healthz` | Liveness-Check |
+| GET | `/pay/doc/{id}` | Zahlungsseite mit QR-Code |
+| POST | `/pay/doc/{id}/paid` | Als bezahlt markieren (Redirect) |
+| POST | `/pay/doc/{id}/save` | Felder speichern (nur bei `ENABLE_EDIT=true`) |
+
+## Development
+
+### Lokaler Build
 
 ```bash
-# PoC-Container entfernen
+# Statt Image aus GHCR: lokal bauen
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay-poc.override.yml \
-  rm -sf cookie-poc
+  -f pay-poc/docker-compose.pay.example.yml \
+  up -d --build
+```
 
-# Image entfernen
-docker image rm $(docker images -q '*cookie-poc*') 2>/dev/null
+Dazu in `docker-compose.pay.example.yml` die `build:`-Zeilen einkommentieren und `image:` auskommentieren.
 
-# Unterverzeichnis löschen
-rm -rf pay-poc/
+### Ohne Docker
+
+```bash
+cd pay-poc/
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+# .env laden (z.B. via direnv oder manuell export)
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+### Release erstellen
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# → GitHub Action baut + pusht ghcr.io/eehser/paperless-pay:v1.0.0
 ```
