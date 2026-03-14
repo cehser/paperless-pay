@@ -1,41 +1,44 @@
 # paperless-pay
 
-SEPA EPC-QR Zahlungsseite für [paperless-ngx](https://github.com/paperless-ngx/paperless-ngx).
+SEPA EPC-QR payment page for [paperless-ngx](https://github.com/paperless-ngx/paperless-ngx).
 
-Zeigt Zahlungsinformationen, generiert EPC-QR-Codes und ermöglicht das Markieren von Dokumenten als bezahlt – alles über Cookie-Passthrough, kein eigener Auth-Layer.
+Displays payment information, generates EPC QR codes, and lets you mark documents as paid – all via cookie passthrough, no separate auth layer required.
 
 ## Features
 
-- **EPC-QR-Code** – SEPA Credit Transfer QR-Code (scannbar mit Banking-Apps)
-- **Zahlungsübersicht** – IBAN, BIC, Betrag, Verwendungszweck aus Paperless Custom Fields
-- **PDF-Vorschau** – Dokument-Preview direkt neben den Zahlungsdaten
-- **Als bezahlt markieren** – setzt ein Boolean Custom Field in Paperless
-- **IBAN-Validierung** – via [schwifty](https://github.com/mdomke/schwifty) (ISO 13616)
-- **Feld-Bearbeitung** – experimentell, per Feature Switch (`ENABLE_EDIT=true`)
-- **Link-Worker** – setzt automatisch Pay-Links in ein URL Custom Field für alle Rechnungen
-- **Verwendungszweck-Template** – konfigurierbar mit Variablen
+- **EPC QR Code** – SEPA Credit Transfer QR code (scannable with banking apps)
+- **Payment overview** – IBAN, BIC, amount, remittance info from Paperless custom fields
+- **PDF preview** – Document preview side-by-side with payment details
+- **Mark as paid** – Sets a boolean custom field in Paperless
+- **IBAN validation** – Via [schwifty](https://github.com/mdomke/schwifty) (ISO 13616)
+- **Field editing** – Experimental, enabled via feature switch (`ENABLE_EDIT=true`)
+- **Link worker** – Automatically sets pay-links in a URL custom field for all invoices
+- **Remittance template** – Configurable with variables
+- **Localization** – English and German included, selectable via `LANGUAGE` env variable
 
 ## Quickstart
 
-### 1. Voraussetzungen
+### 1. Prerequisites
 
-- Laufende **paperless-ngx** Instanz mit Docker Compose
-- Custom Fields in Paperless angelegt: IBAN, Betrag, Verwendungszweck, Bezahlt (+ optional BIC, Pay-Link)
-- Reverse Proxy (nginx o.ä.) der Cookie-Passthrough ermöglicht
+- Running **paperless-ngx** instance with Docker Compose
+- Custom fields created in Paperless: IBAN, Amount, Remittance info, Paid (+ optionally BIC, Pay-Link)
+- Reverse proxy (nginx etc.) that enables cookie passthrough
 
-### 2. Compose einrichten
+### 2. Compose setup
 
 ```bash
-# Repo als Unterverzeichnis in dein Paperless-Compose-Verzeichnis klonen
-cd /opt/paperless            # ← dein Paperless-Compose-Dir
+# Clone this repo as a subdirectory in your Paperless Compose directory
+cd /opt/paperless            # ← your Paperless Compose dir
 git clone https://github.com/eehser/paperless-pay.git pay-poc
 
-# ENV-Datei erstellen
+# Create env files
 cp pay-poc/.env.sample pay-poc/.env
-# → pay-poc/.env anpassen (Custom Field IDs, URLs, etc.)
+cp pay-poc/.env.worker.sample pay-poc/.env.worker
+# → Edit pay-poc/.env (custom field IDs, URLs, etc.)
+# → Edit pay-poc/.env.worker (API token, pay-link field, filter)
 ```
 
-### 3. Starten
+### 3. Start
 
 ```bash
 docker compose \
@@ -44,17 +47,17 @@ docker compose \
   up -d
 ```
 
-> Das Compose-File `docker-compose.pay.example.yml` ist ein **Beispiel**.
-> Passe es an dein Setup an (Service-Namen, Netzwerke, Ports).
+> The compose file `docker-compose.pay.example.yml` is an **example**.
+> Adapt it to your setup (service names, networks, ports).
 
-### 4. Testen
+### 4. Test
 
-1. Im Browser bei Paperless einloggen
-2. Aufrufen: `https://deine-domain.de/pay/doc/123`
+1. Log in to Paperless in your browser
+2. Navigate to: `https://your-domain.com/pay/doc/123`
 
 ## Image
 
-Das Image wird automatisch über GitHub Actions gebaut und auf GHCR publiziert:
+The image is built automatically via GitHub Actions and published to GHCR:
 
 ```
 ghcr.io/eehser/paperless-pay:latest
@@ -62,11 +65,11 @@ ghcr.io/eehser/paperless-pay:latest
 
 ### Tags
 
-| Tag | Wann | Beispiel |
+| Tag | When | Example |
 |---|---|---|
-| `latest` | Jeder Push auf `main` | `ghcr.io/eehser/paperless-pay:latest` |
-| `sha-<hash>` | Jeder Push auf `main` | `ghcr.io/eehser/paperless-pay:sha-abc1234` |
-| `v1.2.3` | Git-Tag `v1.2.3` | `ghcr.io/eehser/paperless-pay:v1.2.3` |
+| `latest` | Every push to `main` | `ghcr.io/eehser/paperless-pay:latest` |
+| `sha-<hash>` | Every push to `main` | `ghcr.io/eehser/paperless-pay:sha-abc1234` |
+| `v1.2.3` | Git tag `v1.2.3` | `ghcr.io/eehser/paperless-pay:v1.2.3` |
 
 ### Architectures
 
@@ -87,90 +90,95 @@ docker compose \
 
 ## Services
 
-Das Image enthält **zwei Modi** – gesteuert über den `command:` in Compose:
+The image contains **two modes** – controlled via `command:` in Compose:
 
-| Service | Command (default) | Beschreibung |
+| Service | Command (default) | Description |
 |---|---|---|
-| **paperless-pay** | `uvicorn main:app ...` (default CMD) | Web-App: Zahlungsseite + QR-Code |
-| **pay-link-worker** | `python -u worker.py` | Polling-Worker: setzt Pay-Links in Custom Fields |
+| **paperless-pay** | `uvicorn main:app ...` (default CMD) | Web app: payment page + QR code |
+| **pay-link-worker** | `python -u worker.py` | Polling worker: sets pay-links in custom fields |
 
-## ENV-Variablen
+## Environment Variables
 
-Siehe [.env.sample](.env.sample) für alle Variablen mit Erklärungen.
+The web app and the link worker use **separate env files** for security
+(the API token stays out of the web container).
 
-### Web-App
+See [.env.sample](.env.sample) and [.env.worker.sample](.env.worker.sample).
 
-| Variable | Pflicht | Default | Beschreibung |
+### Web App
+
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| `PAPERLESS_BASE_URL` | | `http://paperless:8000` | Paperless im Docker-Netz |
-| `PAPERLESS_PUBLIC_URL` | | = `PAPERLESS_BASE_URL` | Öffentliche URL für PDF-iframe |
-| `APP_BASE_PATH` | | `/pay` | URL-Prefix für alle Routes |
-| `CF_IBAN` | ✓ | | Custom Field ID: IBAN |
-| `CF_BIC` | | | Custom Field ID: BIC (optional) |
-| `CF_BETRAG` | ✓ | | Custom Field ID: Betrag |
-| `CF_VERWENDUNGSZWECK` | ✓ | | Custom Field ID: Verwendungszweck |
-| `CF_BEZAHLT` | ✓ | | Custom Field ID: Bezahlt (boolean) |
-| `VERWENDUNGSZWECK_TEMPLATE` | | `{verwendungszweck}` | Template mit `{verwendungszweck}`, `{title}`, `{correspondent}`, `{doc_id}` |
-| `ENABLE_EDIT` | | `false` | Experimentell: Felder editierbar machen |
+| `PAPERLESS_BASE_URL` | | `http://paperless:8000` | Paperless URL inside Docker network |
+| `PAPERLESS_PUBLIC_URL` | | = `PAPERLESS_BASE_URL` | Public URL for PDF iframe |
+| `APP_BASE_PATH` | | `/pay` | URL prefix for all routes |
+| `LANGUAGE` | | `en` | GUI language (`en` or `de`) |
+| `CF_IBAN` | ✓ | | Custom field ID: IBAN |
+| `CF_BIC` | | | Custom field ID: BIC (optional) |
+| `CF_AMOUNT` | ✓ | | Custom field ID: Amount |
+| `CF_REMITTANCE` | ✓ | | Custom field ID: Remittance info |
+| `CF_PAID` | ✓ | | Custom field ID: Paid (boolean) |
+| `REMITTANCE_TEMPLATE` | | `{remittance}` | Template with `{remittance}`, `{title}`, `{correspondent}`, `{doc_id}` |
+| `ENABLE_EDIT` | | `false` | Experimental: enable field editing |
 
-### Link-Worker
+### Link Worker (``.env.worker``)
 
-| Variable | Pflicht | Default | Beschreibung |
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| `PAPERLESS_TOKEN` | ✓ | | API-Token (Paperless Admin → Tokens) |
-| `CF_LINK` | ✓ | | Custom Field ID: Pay-Link (Typ: URL) |
-| `PAY_PUBLIC_URL` | ✓ | | Öffentliche URL, z.B. `https://docs.xy.de/pay` |
-| `WORKER_FILTER` | | `""` | Paperless API Filter, z.B. `document_type__id=3` |
-| `WORKER_INTERVAL` | | `60` | Polling-Intervall in Sekunden |
+| `PAPERLESS_BASE_URL` | | `http://paperless:8000` | Paperless URL inside Docker network |
+| `PAPERLESS_TOKEN` | ✓ | | API token (Paperless Admin → Tokens) |
+| `CF_LINK` | ✓ | | Custom field ID: Pay-Link (type: URL) |
+| `PAY_PUBLIC_URL` | ✓ | | Public URL, e.g. `https://docs.example.com/pay` |
+| `WORKER_FILTER` | | `""` | Paperless API filter, e.g. `document_type__id=3` |
+| `WORKER_INTERVAL` | | `60` | Polling interval in seconds |
 
-### API-Token erstellen
+### Creating an API Token
 
-1. Paperless Admin → **Tokens** (oder `/admin/authtoken/tokenproxy/`)
-2. Neuen Token für einen Benutzer mit Schreibrechten erstellen
-3. Token in `PAPERLESS_TOKEN` eintragen
+1. Paperless Admin → **Tokens** (or `/admin/authtoken/tokenproxy/`)
+2. Create a new token for a user with write permissions
+3. Set the token in `PAPERLESS_TOKEN`
 
 ## nginx
 
-Siehe [nginx.example.conf](nginx.example.conf) – paperless-pay und Paperless müssen
-hinter demselben Reverse Proxy laufen, damit der Browser die Session-Cookies an beide Pfade sendet.
+See [nginx.example.conf](nginx.example.conf) – paperless-pay and Paperless must run
+behind the same reverse proxy so the browser sends session cookies to both paths.
 
-## Routen
+## Routes
 
-| Methode | Pfad | Beschreibung |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/pay/healthz` | Liveness-Check |
-| GET | `/pay/doc/{id}` | Zahlungsseite mit QR-Code |
-| POST | `/pay/doc/{id}/paid` | Als bezahlt markieren (Redirect) |
-| POST | `/pay/doc/{id}/save` | Felder speichern (nur bei `ENABLE_EDIT=true`) |
+| GET | `/pay/healthz` | Liveness check |
+| GET | `/pay/doc/{id}` | Payment page with QR code |
+| POST | `/pay/doc/{id}/paid` | Mark as paid (redirect) |
+| POST | `/pay/doc/{id}/save` | Save fields (only when `ENABLE_EDIT=true`) |
 
 ## Development
 
-### Lokaler Build
+### Local Build
 
 ```bash
-# Statt Image aus GHCR: lokal bauen
+# Instead of pulling from GHCR: build locally
 docker compose \
   -f docker-compose.yml \
   -f pay-poc/docker-compose.pay.example.yml \
   up -d --build
 ```
 
-Dazu in `docker-compose.pay.example.yml` die `build:`-Zeilen einkommentieren und `image:` auskommentieren.
+Uncomment the `build:` lines and comment out `image:` in `docker-compose.pay.example.yml`.
 
-### Ohne Docker
+### Without Docker
 
 ```bash
 cd pay-poc/
 python -m venv .venv
 .venv/bin/pip install -r requirements.txt
-# .env laden (z.B. via direnv oder manuell export)
+# Load .env (e.g. via direnv or manual export)
 uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-### Release erstellen
+### Creating a Release
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
-# → GitHub Action baut + pusht ghcr.io/eehser/paperless-pay:v1.0.0
+# → GitHub Action builds + pushes ghcr.io/eehser/paperless-pay:v1.0.0
 ```

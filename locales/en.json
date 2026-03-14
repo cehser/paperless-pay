@@ -1,0 +1,49 @@
+{
+  "status": {
+    "paid": "PAID",
+    "open": "OPEN",
+    "edit": "EDIT"
+  },
+  "label": {
+    "payee": "Payee",
+    "iban": "IBAN",
+    "bic": "BIC",
+    "amount": "Amount",
+    "remittance": "Remittance info"
+  },
+  "btn": {
+    "save": "Save",
+    "mark_paid": "Mark as paid"
+  },
+  "msg": {
+    "saved": "Saved ✓",
+    "iban_valid": "IBAN valid",
+    "iban_invalid": "IBAN invalid",
+    "iban_empty": "IBAN is empty"
+  },
+  "page": {
+    "payment": "Payment",
+    "document": "Document"
+  },
+  "error": {
+    "not_logged_in_title": "Not logged in",
+    "not_logged_in_body": "Please log in to Paperless first.",
+    "not_authenticated_title": "Not authenticated",
+    "not_authenticated_body": "Session expired? Please log in again.",
+    "not_found_title": "Not found",
+    "not_found_body": "Document %{doc_id} does not exist.",
+    "upstream_title": "Error",
+    "upstream_body": "Paperless returned status %{status}.",
+    "connection_title": "Connection error",
+    "connection_body": "Cannot reach Paperless.",
+    "edit_disabled_title": "Not allowed",
+    "edit_disabled_body": "Field editing is disabled."
+  },
+  "qr": {
+    "paid_text": "PAID"
+  },
+  "field": {
+    "amount": "Amount",
+    "correspondent": "Correspondent"
+  }
+}

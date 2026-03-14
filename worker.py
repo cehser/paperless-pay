@@ -1,10 +1,10 @@
 """
-paperless-pay – Link-Worker
+paperless-pay – Link Worker
 
-Pollt die Paperless-API und setzt für alle passenden Dokumente
-(z.B. Rechnungen) einen Pay-Link in ein URL-Custom-Field.
+Polls the Paperless API and sets a pay-link in a URL custom field
+for all matching documents (e.g. invoices).
 
-Auth via API-Token (headless, kein Cookie).
+Auth via API token (headless, no cookie).
 """
 
 from __future__ import annotations
@@ -17,31 +17,31 @@ import httpx
 from pydantic_settings import BaseSettings
 
 # ---------------------------------------------------------------------------
-# Konfiguration
+# Configuration
 # ---------------------------------------------------------------------------
 
 class WorkerSettings(BaseSettings):
-    """Einstellungen für den Link-Worker (ausschließlich aus ENV)."""
+    """Settings for the link worker (read exclusively from ENV)."""
 
     # --- Paperless upstream --------------------------------------------------
     paperless_base_url: str = "http://paperless:8000"
-    paperless_token: str  # API-Token (Pflicht)
+    paperless_token: str  # API token (required)
 
-    # --- custom field für den Pay-Link ---------------------------------------
-    cf_link: int  # Custom-Field-ID (Typ: URL)
+    # --- Custom field for the pay-link ---------------------------------------
+    cf_link: int  # Custom field ID (type: URL)
 
-    # --- öffentliche URL von paperless-pay -----------------------------------
-    pay_public_url: str  # z.B. https://docs.cehser.de/pay
+    # --- Public URL of paperless-pay -----------------------------------------
+    pay_public_url: str  # e.g. https://docs.example.com/pay
 
     # --- Filter (Paperless API query params) ---------------------------------
-    # Frei konfigurierbarer API-Filter, z.B.:
-    #   document_type__id=3           → nur Rechnungen
-    #   tags__id__all=5               → nur bestimmter Tag
-    #   tags__id__all=5&correspondent__id=2  → Tag + Korrespondent
+    # Freely configurable API filter, e.g.:
+    #   document_type__id=3           → invoices only
+    #   tags__id__all=5               → specific tag only
+    #   tags__id__all=5&correspondent__id=2  → tag + correspondent
     worker_filter: str = ""
 
     # --- Timing --------------------------------------------------------------
-    worker_interval: int = 60  # Sekunden zwischen Durchläufen
+    worker_interval: int = 60  # seconds between polling cycles
 
     model_config = {"env_file": None}
 
@@ -60,7 +60,7 @@ logging.basicConfig(
 logger = logging.getLogger("paperless-pay.worker")
 
 # ---------------------------------------------------------------------------
-# HTTP-Helpers
+# HTTP helpers
 # ---------------------------------------------------------------------------
 
 def _auth_headers() -> dict[str, str]:
@@ -76,18 +76,18 @@ def _build_pay_url(doc_id: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Core-Logik
+# Core logic
 # ---------------------------------------------------------------------------
 
 async def _fetch_documents(client: httpx.AsyncClient) -> list[dict]:
     """
-    Holt *alle* Dokumente, die dem konfigurierten Filter entsprechen.
-    Paginiert automatisch.
+    Fetch *all* documents matching the configured filter.
+    Paginates automatically.
     """
     url = f"{settings.paperless_base_url}/api/documents/"
     params = {"page_size": "100"}
 
-    # Worker-Filter als zusätzliche Query-Parameter einfügen
+    # Insert worker filter as additional query parameters
     if settings.worker_filter:
         for pair in settings.worker_filter.split("&"):
             if "=" in pair:
@@ -114,7 +114,7 @@ async def _fetch_documents(client: httpx.AsyncClient) -> list[dict]:
 
 
 def _has_link(doc: dict) -> bool:
-    """Prüft ob das Dokument bereits einen Pay-Link im CF_LINK-Feld hat."""
+    """Check whether the document already has a pay-link in the CF_LINK field."""
     for cf in doc.get("custom_fields", []):
         if cf.get("field") == settings.cf_link:
             val = cf.get("value")
@@ -124,12 +124,12 @@ def _has_link(doc: dict) -> bool:
 
 def _build_patch_payload(doc: dict, link: str) -> dict:
     """
-    Baut das PATCH-Payload für custom_fields.
-    Bestehende Custom Fields beibehalten, CF_LINK setzen/überschreiben.
+    Build the PATCH payload for custom_fields.
+    Keep existing custom fields, set/overwrite CF_LINK.
     """
     existing: list[dict] = doc.get("custom_fields", [])
 
-    # Bestehende Felder übernehmen, CF_LINK ersetzen falls vorhanden
+    # Keep existing fields, replace CF_LINK if present
     new_fields = [cf for cf in existing if cf.get("field") != settings.cf_link]
     new_fields.append({"field": settings.cf_link, "value": link})
 
@@ -144,13 +144,13 @@ async def _patch_document(client: httpx.AsyncClient, doc_id: int, payload: dict)
 
 
 # ---------------------------------------------------------------------------
-# Hauptschleife
+# Main loop
 # ---------------------------------------------------------------------------
 
 async def run_once(client: httpx.AsyncClient) -> int:
-    """Ein Durchlauf: Dokumente prüfen und Links setzen. Gibt Anzahl gepatcht zurück."""
+    """Single pass: check documents and set links. Returns number of patched documents."""
     docs = await _fetch_documents(client)
-    logger.info("Gefundene Dokumente (Filter): %d", len(docs))
+    logger.info("Documents found (filter): %d", len(docs))
 
     patched = 0
     for doc in docs:
@@ -164,35 +164,35 @@ async def run_once(client: httpx.AsyncClient) -> int:
 
         try:
             await _patch_document(client, doc_id, payload)
-            logger.info("✓ Dokument #%d → %s", doc_id, link)
+            logger.info("✓ Document #%d → %s", doc_id, link)
             patched += 1
         except httpx.HTTPStatusError as exc:
-            logger.error("✗ Dokument #%d – HTTP %d: %s",
+            logger.error("✗ Document #%d – HTTP %d: %s",
                          doc_id, exc.response.status_code, exc.response.text[:200])
         except httpx.HTTPError as exc:
-            logger.error("✗ Dokument #%d – Fehler: %s", doc_id, exc)
+            logger.error("✗ Document #%d – Error: %s", doc_id, exc)
 
     return patched
 
 
 async def main() -> None:
-    logger.info("paperless-pay Link-Worker gestartet")
+    logger.info("paperless-pay link worker started")
     logger.info("  Paperless:  %s", settings.paperless_base_url)
     logger.info("  Pay-URL:    %s", settings.pay_public_url)
     logger.info("  CF_LINK:    %d", settings.cf_link)
-    logger.info("  Filter:     %s", settings.worker_filter or "(kein Filter – ALLE Dokumente)")
-    logger.info("  Intervall:  %ds", settings.worker_interval)
+    logger.info("  Filter:     %s", settings.worker_filter or "(no filter – ALL documents)")
+    logger.info("  Interval:   %ds", settings.worker_interval)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         while True:
             try:
                 patched = await run_once(client)
                 if patched:
-                    logger.info("Durchlauf fertig – %d Dokument(e) gepatcht", patched)
+                    logger.info("Pass complete – %d document(s) patched", patched)
             except httpx.ConnectError as exc:
-                logger.error("Verbindungsfehler: %s", exc)
+                logger.error("Connection error: %s", exc)
             except Exception:
-                logger.exception("Unerwarteter Fehler im Worker-Durchlauf")
+                logger.exception("Unexpected error in worker pass")
 
             await asyncio.sleep(settings.worker_interval)
 

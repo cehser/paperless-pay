@@ -1,5 +1,5 @@
 """
-paperless-pay – Paperless-ngx API Client (Cookie-Passthrough)
+paperless-pay – Paperless-ngx API client (cookie passthrough)
 """
 
 from __future__ import annotations
@@ -16,11 +16,11 @@ from models import PaymentInfo
 logger = logging.getLogger("paperless-pay.client")
 
 # ---------------------------------------------------------------------------
-# Header-Handling
+# Header handling
 # ---------------------------------------------------------------------------
 
 def _extract_csrf_token(cookie: str | None) -> str | None:
-    """Extrahiert das CSRF-Token aus dem Cookie-Header."""
+    """Extract the CSRF token from the Cookie header."""
     if not cookie:
         return None
     for part in cookie.split(";"):
@@ -31,7 +31,7 @@ def _extract_csrf_token(cookie: str | None) -> str | None:
 
 
 def build_upstream_headers(cookie: str | None, user_agent: str | None = None) -> dict[str, str]:
-    """Baut Header für den Upstream-Request. Cookie 1:1, Accept immer JSON."""
+    """Build headers for upstream requests. Cookie forwarded as-is, Accept always JSON."""
     headers: dict[str, str] = {"accept": "application/json"}
     if cookie:
         headers["cookie"] = cookie
@@ -41,7 +41,7 @@ def build_upstream_headers(cookie: str | None, user_agent: str | None = None) ->
 
 
 def build_upstream_headers_write(cookie: str | None, user_agent: str | None = None) -> dict[str, str]:
-    """Baut Header für schreibende Upstream-Requests (PATCH/POST). Inkl. CSRF-Token."""
+    """Build headers for write upstream requests (PATCH/POST). Includes CSRF token."""
     headers = build_upstream_headers(cookie, user_agent)
     csrf = _extract_csrf_token(cookie)
     if csrf:
@@ -50,37 +50,37 @@ def build_upstream_headers_write(cookie: str | None, user_agent: str | None = No
 
 
 # ---------------------------------------------------------------------------
-# Custom-Field-Extraktion
+# Custom field extraction
 # ---------------------------------------------------------------------------
 
 def _extract_cf_value(custom_fields: list[dict], field_id: int) -> Any:
-    """Extrahiert den Wert eines Custom Fields anhand seiner ID."""
+    """Extract the value of a custom field by its ID."""
     for cf in custom_fields:
-        # Paperless gibt custom_fields als [{field: <id>, value: <val>}, ...]
+        # Paperless returns custom_fields as [{field: <id>, value: <val>}, ...]
         if cf.get("field") == field_id:
             return cf.get("value")
     return None
 
 
 def _parse_decimal(value: Any) -> Decimal | None:
-    """Parst einen Wert sicher in Decimal. Entfernt Währungspräfixe wie 'EUR'."""
+    """Safely parse a value into Decimal. Strips currency prefixes like 'EUR'."""
     if value is None:
         return None
     try:
         raw = str(value).strip()
-        # Währungspräfix entfernen (z.B. "EUR693.12" → "693.12")
+        # Strip currency prefix (e.g. "EUR693.12" → "693.12")
         for prefix in ("EUR", "USD", "GBP", "CHF", "€", "$", "£"):
             if raw.upper().startswith(prefix):
                 raw = raw[len(prefix):].strip()
                 break
         return Decimal(raw)
     except (InvalidOperation, ValueError, TypeError):
-        logger.warning("Konnte Betrag nicht parsen: %r", value)
+        logger.warning("Could not parse amount: %r", value)
         return None
 
 
 def _parse_bool(value: Any) -> bool:
-    """Parst einen Wert sicher in bool."""
+    """Safely parse a value into bool."""
     if value is None:
         return False
     if isinstance(value, bool):
@@ -91,7 +91,7 @@ def _parse_bool(value: Any) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# API Calls
+# API calls
 # ---------------------------------------------------------------------------
 
 async def fetch_document(
@@ -101,9 +101,9 @@ async def fetch_document(
     user_agent: str | None = None,
 ) -> dict[str, Any]:
     """
-    Lädt ein Dokument von Paperless.
-    Gibt das rohe JSON-dict zurück.
-    Raises httpx.HTTPStatusError bei Fehlern.
+    Fetch a document from Paperless.
+    Returns the raw JSON dict.
+    Raises httpx.HTTPStatusError on errors.
     """
     url = f"{settings.paperless_base_url.rstrip('/')}/api/documents/{doc_id}/"
     headers = build_upstream_headers(cookie, user_agent)
@@ -125,7 +125,7 @@ async def fetch_correspondent(
     cookie: str | None,
     user_agent: str | None = None,
 ) -> str:
-    """Lädt den Namen eines Korrespondenten. Gibt '' bei Fehler zurück."""
+    """Fetch the name of a correspondent. Returns '' on error."""
     url = f"{settings.paperless_base_url.rstrip('/')}/api/correspondents/{correspondent_id}/"
     headers = build_upstream_headers(cookie, user_agent)
 
@@ -136,7 +136,7 @@ async def fetch_correspondent(
         data = resp.json()
         return data.get("name", "")
     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-        logger.warning("Korrespondent %d nicht ladbar: %s", correspondent_id, exc)
+        logger.warning("Could not load correspondent %d: %s", correspondent_id, exc)
         return ""
 
 
@@ -147,15 +147,15 @@ async def build_payment_info(
     user_agent: str | None = None,
 ) -> PaymentInfo:
     """
-    Lädt Dokument + Korrespondent und baut PaymentInfo zusammen.
-    Raises httpx.HTTPStatusError wenn das Dokument nicht geladen werden kann.
+    Fetch document + correspondent and assemble PaymentInfo.
+    Raises httpx.HTTPStatusError when the document cannot be loaded.
     """
     doc = await fetch_document(client, doc_id, cookie, user_agent)
 
     custom_fields = doc.get("custom_fields", [])
     correspondent_id = doc.get("correspondent")
 
-    # Korrespondent-Name auflösen
+    # Resolve correspondent name
     correspondent_name = ""
     if correspondent_id:
         correspondent_name = await fetch_correspondent(
@@ -169,9 +169,9 @@ async def build_payment_info(
         correspondent_name=correspondent_name,
         iban=_extract_cf_value(custom_fields, settings.cf_iban) or "",
         bic=(_extract_cf_value(custom_fields, settings.cf_bic) or "") if settings.cf_bic else "",
-        betrag=_parse_decimal(_extract_cf_value(custom_fields, settings.cf_betrag)),
-        verwendungszweck=_extract_cf_value(custom_fields, settings.cf_verwendungszweck) or "",
-        bezahlt=_parse_bool(_extract_cf_value(custom_fields, settings.cf_bezahlt)),
+        amount=_parse_decimal(_extract_cf_value(custom_fields, settings.cf_amount)),
+        remittance=_extract_cf_value(custom_fields, settings.cf_remittance) or "",
+        paid=_parse_bool(_extract_cf_value(custom_fields, settings.cf_paid)),
         raw_custom_fields=custom_fields,
     )
 
@@ -184,24 +184,24 @@ async def mark_as_paid(
     user_agent: str | None = None,
 ) -> int:
     """
-    Setzt das Custom Field 'Bezahlt' auf true via PATCH.
-    Gibt den HTTP-Statuscode zurück.
+    Set the 'paid' custom field to true via PATCH.
+    Returns the HTTP status code.
     """
     url = f"{settings.paperless_base_url.rstrip('/')}/api/documents/{doc_id}/"
     headers = build_upstream_headers_write(cookie, user_agent)
-    # alle anderen Felder beibehalten
+    # Keep all other fields, only update the paid field
     updated_fields = []
-    bezahlt_found = False
+    paid_found = False
     for cf in current_custom_fields:
-        if cf.get("field") == settings.cf_bezahlt:
-            updated_fields.append({"field": settings.cf_bezahlt, "value": True})
-            bezahlt_found = True
+        if cf.get("field") == settings.cf_paid:
+            updated_fields.append({"field": settings.cf_paid, "value": True})
+            paid_found = True
         else:
             updated_fields.append(cf)
 
-    # Falls das Feld noch gar nicht existiert, hinzufügen
-    if not bezahlt_found:
-        updated_fields.append({"field": settings.cf_bezahlt, "value": True})
+    # Add the field if it doesn't exist yet
+    if not paid_found:
+        updated_fields.append({"field": settings.cf_paid, "value": True})
 
     payload = {"custom_fields": updated_fields}
 
@@ -227,12 +227,12 @@ async def update_custom_fields(
     user_agent: str | None = None,
 ) -> int:
     """
-    Aktualisiert beliebige Custom Fields via PATCH.
+    Update arbitrary custom fields via PATCH.
 
     Args:
-        updates: Dict von {field_id: new_value}
+        updates: Dict of {field_id: new_value}
 
-    Gibt den HTTP-Statuscode zurück.
+    Returns the HTTP status code.
     """
     url = f"{settings.paperless_base_url.rstrip('/')}/api/documents/{doc_id}/"
     headers = build_upstream_headers_write(cookie, user_agent)
@@ -248,7 +248,7 @@ async def update_custom_fields(
         else:
             updated_fields.append(cf)
 
-    # Felder hinzufügen, die noch nicht existierten
+    # Add fields that didn't exist yet
     for fid, val in updates.items():
         if fid not in updated_ids:
             updated_fields.append({"field": fid, "value": val})

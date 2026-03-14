@@ -1,28 +1,29 @@
 # ==========================================================================
-# paperless-pay – Beispiel Compose-Override
+# paperless-pay – Example Compose Override
 # ==========================================================================
 #
-# Dieses File ist ein BEISPIEL und muss an dein Setup angepasst werden.
-# Es wird additiv zu deiner bestehenden paperless-ngx Compose-Datei genutzt:
+# This file is an EXAMPLE and must be adapted to your setup.
+# It is used additively with your existing paperless-ngx compose file:
 #
 #   docker compose \
 #     -f docker-compose.yml \
 #     -f pay-poc/docker-compose.pay.example.yml \
 #     up -d
 #
-# Voraussetzungen:
-#   - Dieses Repo als Unterverzeichnis "pay-poc/" im Paperless-Compose-Dir
-#   - pay-poc/.env mit den passenden Werten (siehe .env.sample)
+# Prerequisites:
+#   - This repo as subdirectory "pay-poc/" in your Paperless compose dir
+#   - pay-poc/.env and pay-poc/.env.worker with the appropriate values
+#     (see .env.sample and .env.worker.sample)
 #
-# Für lokale Entwicklung mit eigenem Build siehe README → Development.
+# For local development with a custom build, see README → Development.
 # ==========================================================================
 
 services:
-  # --- Web-App (Zahlungsseite + QR-Code) -----------------------------------
+  # --- Web app (payment page + QR code) ------------------------------------
   paperless-pay:
     image: ghcr.io/eehser/paperless-pay:latest
-    # Zum selber bauen statt Image: die nächste Zeile einkommentieren,
-    # "image:" auskommentieren:
+    # To build locally instead of using the image: uncomment the next line,
+    # comment out "image:":
     # build:
     #   context: ./pay-poc
     env_file: pay-poc/.env
@@ -30,11 +31,11 @@ services:
       - "8081:8080"
     restart: unless-stopped
 
-  # --- Link-Worker (setzt Pay-URLs in Custom Fields) -----------------------
+  # --- Link worker (sets pay URLs in custom fields) ------------------------
   pay-link-worker:
     image: ghcr.io/eehser/paperless-pay:latest
     # build:
     #   context: ./pay-poc
     command: ["python", "-u", "worker.py"]
-    env_file: pay-poc/.env
+    env_file: pay-poc/.env.worker
     restart: unless-stopped

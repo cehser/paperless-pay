@@ -1,8 +1,8 @@
 """
-paperless-pay – EPC-QR-Code-Generierung (SEPA Credit Transfer)
+paperless-pay – EPC QR code generation (SEPA Credit Transfer)
 
-Nutzt segno für die QR-Code-Erzeugung im EPC-Format.
-Referenz: European Payments Council – Quick Response Code (EPC QR)
+Uses segno for QR code generation in the EPC format.
+Reference: European Payments Council – Quick Response Code (EPC QR)
 """
 
 from __future__ import annotations
@@ -13,12 +13,13 @@ import logging
 import segno
 
 from config import settings
+from translations import t
 from models import PaymentInfo
-from verwendungszweck import render_verwendungszweck
+from remittance import render_remittance
 
 logger = logging.getLogger("paperless-pay.qr")
 
-# EPC-QR Maximallängen laut Spezifikation
+# EPC-QR maximum lengths per specification
 _MAX_NAME = 70
 _MAX_REMITTANCE = 140
 _MAX_IBAN = 34
@@ -26,30 +27,30 @@ _MAX_BIC = 11
 
 
 def _truncate(value: str, max_len: int) -> str:
-    """Kürzt einen String auf die maximale Länge."""
+    """Truncate a string to the maximum length."""
     return value[:max_len]
 
 
-def _render_verwendungszweck(info: PaymentInfo) -> str:
-    """Wendet das Verwendungszweck-Template an."""
-    return render_verwendungszweck(info)
+def _render_remittance(info: PaymentInfo) -> str:
+    """Apply the remittance info template."""
+    return render_remittance(info)
 
 
 def build_epc_payload(info: PaymentInfo) -> str:
     """
-    Baut den EPC-QR-Code-Payload (Text) gemäß EPC069-12.
+    Build the EPC QR code payload (text) according to EPC069-12.
 
     Format:
-        BCD\n002\n1\nSCT\n{BIC}\n{Name}\n{IBAN}\nEUR{Betrag}\n\n{Remittance}\n\n
+        BCD\\n002\\n1\\nSCT\\n{BIC}\\n{Name}\\n{IBAN}\\nEUR{Amount}\\n\\n{Remittance}\\n\\n
     """
     if not info.is_payable:
-        raise ValueError(f"Dokument {info.doc_id} ist nicht zahlbar: fehlende Felder {info.missing_fields}")
+        raise ValueError(f"Document {info.doc_id} is not payable: missing fields {info.missing_fields}")
 
     name = _truncate(info.correspondent_name, _MAX_NAME)
     iban = _truncate(info.iban.replace(" ", ""), _MAX_IBAN)
     bic = _truncate(info.bic.replace(" ", ""), _MAX_BIC) if info.bic else ""
-    amount = f"EUR{info.betrag:.2f}"
-    remittance = _render_verwendungszweck(info)
+    amount = f"EUR{info.amount:.2f}"
+    remittance = _render_remittance(info)
 
     lines = [
         "BCD",           # Service Tag
@@ -72,12 +73,12 @@ def build_epc_payload(info: PaymentInfo) -> str:
 
 def generate_qr_svg(info: PaymentInfo) -> str:
     """
-    Generiert einen EPC-QR-Code als SVG-String.
-    Gibt inline-fähiges SVG zurück.
+    Generate an EPC QR code as SVG string.
+    Returns inline-embeddable SVG.
     """
     payload = build_epc_payload(info)
 
-    # EPC-QR muss Error Correction Level M sein
+    # EPC-QR requires Error Correction Level M
     qr = segno.make(payload, error="m")
 
     buffer = io.BytesIO()
@@ -87,17 +88,17 @@ def generate_qr_svg(info: PaymentInfo) -> str:
         scale=4,
         border=2,
         svgclass="epc-qr",
-        xmldecl=False,     # kein <?xml ...?> – für inline-Embed
+        xmldecl=False,     # no <?xml ...?> – for inline embedding
     )
     return buffer.getvalue().decode("utf-8")
 
 
 def generate_dummy_svg() -> str:
     """
-    Generiert einen 'Dummy'-QR-Code für bereits bezahlte Dokumente.
-    Enthält nur den Text 'BEZAHLT'.
+    Generate a 'dummy' QR code for already-paid documents.
+    Contains only the localized 'PAID' text.
     """
-    qr = segno.make("BEZAHLT", error="m")
+    qr = segno.make(t("qr.paid_text"), error="m")
 
     buffer = io.BytesIO()
     qr.save(

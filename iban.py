@@ -1,6 +1,6 @@
-"""paperless-pay – IBAN-Validierung
+"""paperless-pay – IBAN validation
 
-Dünner Wrapper um ``schwifty`` (ISO 13616, vollständige Länder- / BBAN-Prüfung).
+Thin wrapper around ``schwifty`` (ISO 13616, full country / BBAN checks).
 """
 
 from __future__ import annotations
@@ -8,13 +8,15 @@ from __future__ import annotations
 from schwifty import IBAN
 from schwifty.exceptions import SchwiftyException
 
+from translations import t
+
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 class IbanValidationResult:
-    """Ergebnis einer IBAN-Validierung."""
+    """Result of an IBAN validation."""
 
     __slots__ = ("valid", "error", "iban_pretty", "country_code")
 
@@ -39,15 +41,15 @@ class IbanValidationResult:
 
 def validate_iban(raw: str) -> IbanValidationResult:
     """
-    Validiert eine IBAN via schwifty (ISO 13616).
+    Validate an IBAN via schwifty (ISO 13616).
 
-    Prüft Ländercode, Länge, BBAN-Struktur und Check-Digits.
+    Checks country code, length, BBAN structure and check digits.
 
     Returns:
-        IbanValidationResult mit .valid, .error, .iban_pretty
+        IbanValidationResult with .valid, .error, .iban_pretty
     """
     if not raw or not raw.strip():
-        return IbanValidationResult(valid=False, error="IBAN ist leer")
+        return IbanValidationResult(valid=False, error=t("msg.iban_empty"))
 
     try:
         iban = IBAN(raw)

@@ -1,5 +1,5 @@
 """
-paperless-pay – Datenmodelle
+paperless-pay – Data models
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from decimal import Decimal
 
 @dataclass(frozen=True)
 class PaymentInfo:
-    """Extrahierte Zahlungsinformationen aus Paperless Custom Fields."""
+    """Payment information extracted from Paperless custom fields."""
 
     doc_id: int
     title: str
@@ -19,32 +19,32 @@ class PaymentInfo:
 
     iban: str = ""
     bic: str = ""
-    betrag: Decimal | None = None
-    verwendungszweck: str = ""
-    bezahlt: bool = False
+    amount: Decimal | None = None
+    remittance: str = ""
+    paid: bool = False
 
-    # Rohdaten für Debugging
+    # Raw data for debugging
     raw_custom_fields: list[dict] = field(default_factory=list)
 
     @property
     def is_payable(self) -> bool:
-        """True wenn alle Pflichtfelder für EPC-QR vorhanden und nicht bezahlt."""
+        """True when all required fields for EPC-QR are present and not yet paid."""
         return bool(
             self.iban
-            and self.betrag
-            and self.betrag > 0
+            and self.amount
+            and self.amount > 0
             and self.correspondent_name
-            and not self.bezahlt
+            and not self.paid
         )
 
     @property
     def missing_fields(self) -> list[str]:
-        """Liste fehlender Pflichtfelder."""
+        """List of missing required fields."""
         missing = []
         if not self.iban:
             missing.append("IBAN")
-        if not self.betrag or self.betrag <= 0:
-            missing.append("Betrag")
+        if not self.amount or self.amount <= 0:
+            missing.append("Amount")
         if not self.correspondent_name:
-            missing.append("Korrespondent")
+            missing.append("Correspondent")
         return missing

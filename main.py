@@ -1,8 +1,8 @@
 """
-paperless-pay – FastAPI Hauptmodul
+paperless-pay – FastAPI main module
 
-Zeigt Zahlungsinformationen und EPC-QR-Code für Paperless-Dokumente.
-Authentifizierung ausschließlich via Cookie-Passthrough.
+Displays payment information and EPC QR codes for Paperless documents.
+Authentication exclusively via cookie passthrough.
 """
 
 from __future__ import annotations
@@ -15,10 +15,12 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from config import settings
+from translations import get_locale, t
 from iban import validate_iban
+from models import PaymentInfo
 from paperless_client import build_payment_info, mark_as_paid, update_custom_fields
 from qr import generate_dummy_svg, generate_qr_svg
-from verwendungszweck import render_verwendungszweck
+from remittance import render_remittance
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -41,9 +43,10 @@ HTTP_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 async def lifespan(app: FastAPI):
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
     logger.info(
-        "Started – PAPERLESS_BASE_URL=%s  APP_BASE_PATH=%s",
+        "Started – PAPERLESS_BASE_URL=%s  APP_BASE_PATH=%s  LANGUAGE=%s",
         settings.paperless_base_url,
         settings.app_base_path,
+        settings.language,
     )
     yield
     await app.state.client.aclose()
@@ -80,16 +83,16 @@ def _get_ua(request: Request) -> str | None:
 
 
 def _pdf_url(doc_id: int) -> str:
-    """URL für den PDF-Download/-Preview (geht an Paperless direkt via Browser)."""
+    """URL for the PDF download/preview (served by Paperless via the browser)."""
     return f"{settings.public_url.rstrip('/')}/api/documents/{doc_id}/preview/"
 
 
 # ---------------------------------------------------------------------------
-# HTML-Template (inline – Phase 3 wird auf Jinja2 umgestellt wenn nötig)
+# HTML template (inline)
 # ---------------------------------------------------------------------------
 
 def _iban_hint(iban: str) -> str:
-    """Gibt ein HTML-Snippet für die IBAN-Validierung zurück."""
+    """Return an HTML snippet for IBAN validation feedback."""
     if not iban:
         return ""
     result = validate_iban(iban)
@@ -99,7 +102,7 @@ def _iban_hint(iban: str) -> str:
 
 
 def _render_field_readonly(label: str, value: str, extra_html: str = "", css: str = "") -> str:
-    """Einzelnes Feld im Readonly-Modus."""
+    """Single field in read-only mode."""
     return f"""<div class="field {css}">
         <label>{label}</label>
         <div class="value">{value or '–'}</div>
@@ -109,7 +112,7 @@ def _render_field_readonly(label: str, value: str, extra_html: str = "", css: st
 
 def _render_field_editable(label: str, name: str, value: str, extra_html: str = "",
                            input_type: str = "text", step: str = "") -> str:
-    """Einzelnes Feld im Edit-Modus."""
+    """Single field in edit mode."""
     step_attr = f' step="{step}"' if step else ""
     return f"""<div class="field">
         <label>{label}</label>
@@ -120,38 +123,39 @@ def _render_field_editable(label: str, name: str, value: str, extra_html: str = 
 
 def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool = False) -> str:
     """Render the payment page as HTML."""
-    is_paid = info.bezahlt is True
+    is_paid = info.paid is True
     editable = settings.enable_edit and not is_paid
     iban_result = validate_iban(info.iban) if info.iban else None
-    verwendungszweck_display = render_verwendungszweck(info)
+    remittance_display = render_remittance(info)
     public_base = settings.paperless_public_url or settings.paperless_base_url
+    locale = get_locale()
 
-    # --- Optionale Felder: nur anzeigen wenn CF konfiguriert ---
+    # --- Optional fields: only show when CF is configured ---
     show_bic = settings.cf_bic is not None
 
     status_badge = (
         '<span style="display:inline-block;padding:6px 18px;border-radius:12px;'
         'font-size:.95em;font-weight:600;'
         f'{"background:#e8f5e9;color:#2e7d32" if is_paid else "background:#fff3e0;color:#e65100"}'
-        f'">{"BEZAHLT" if is_paid else "OFFEN"}</span>'
+        f'">{t("status.paid") if is_paid else t("status.open")}</span>'
     )
 
     edit_badge = (
         ' <span style="display:inline-block;padding:3px 10px;border-radius:8px;'
         'font-size:.75em;font-weight:600;background:#e3f2fd;color:#1565c0'
-        '">EDIT</span>' if editable else ""
+        f'">{t("status.edit")}</span>' if editable else ""
     )
 
     iban_display = info.iban or "–"
     iban_hint = ""
     if info.iban and iban_result:
         if iban_result.valid:
-            iban_display = iban_result.formatted
-            iban_hint = ' <span style="color:#2e7d32" title="IBAN gültig">✓</span>'
+            iban_display = iban_result.iban_pretty
+            iban_hint = f' <span style="color:#2e7d32" title="{t("msg.iban_valid")}">✓</span>'
         else:
             iban_hint = f' <span style="color:#c62828" title="{iban_result.error}">✗ {iban_result.error}</span>'
 
-    # --- Felder-Rendering ---
+    # --- Field rendering ---
     if editable:
         iban_field = (
             f'<input type="text" name="iban" value="{info.iban or ""}" '
@@ -162,47 +166,47 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
             f'<input type="text" name="bic" value="{info.bic or ""}" '
             f'style="width:100%;padding:6px;font-size:1.05em">'
         ) if show_bic else ""
-        betrag_field = (
-            f'<input type="text" name="betrag" value="{info.betrag or ""}" '
+        amount_field = (
+            f'<input type="text" name="amount" value="{info.amount or ""}" '
             f'style="width:100%;padding:6px;font-size:1.05em">'
         )
-        verwendungszweck_field = (
-            f'<input type="text" name="verwendungszweck" value="{info.verwendungszweck or ""}" '
+        remittance_field = (
+            f'<input type="text" name="remittance" value="{info.remittance or ""}" '
             f'style="width:100%;padding:6px;font-size:1.05em">'
         )
     else:
         iban_field = f'<span style="font-family:monospace;font-size:1.05em">{iban_display}</span>{iban_hint}'
         bic_field = f'<span style="font-size:1.05em">{info.bic or "–"}</span>' if show_bic else ""
-        betrag_field = f'<span style="font-size:1.05em">{info.betrag or "–"} EUR</span>'
-        verwendungszweck_field = f'<span style="font-size:1.05em">{verwendungszweck_display or "–"}</span>'
+        amount_field = f'<span style="font-size:1.05em">{info.amount or "–"} EUR</span>'
+        remittance_field = f'<span style="font-size:1.05em">{remittance_display or "–"}</span>'
 
-    # --- BIC-Block (nur wenn konfiguriert) ---
+    # --- BIC block (only when configured) ---
     bic_block = ""
     if show_bic:
         bic_block = f"""
             <div style="margin-bottom:14px">
-              <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">BIC</div>
+              <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">{t("label.bic")}</div>
               {bic_field}
             </div>
         """
 
-    # --- Error/Success Banner ---
+    # --- Error/Success banner ---
     banner = ""
     if error:
         banner = f'<div style="background:#ffebee;color:#c62828;padding:12px;border-radius:8px;margin-bottom:16px">{error}</div>'
     if save_ok:
-        banner = '<div style="background:#e8f5e9;color:#2e7d32;padding:12px;border-radius:8px;margin-bottom:16px">Gespeichert ✓</div>'
+        banner = f'<div style="background:#e8f5e9;color:#2e7d32;padding:12px;border-radius:8px;margin-bottom:16px">{t("msg.saved")}</div>'
 
-    # --- Form wrapper (nur im Edit-Modus) ---
+    # --- Form wrapper (only in edit mode) ---
     form_open = f'<form method="post" action="{settings.app_base_path}/doc/{doc_id}/save">' if editable else ""
     form_close = ""
     if editable:
-        form_close = """
+        form_close = f"""
             <button type="submit"
                     style="width:100%;padding:14px;background:#43a047;color:#fff;
                            border:none;border-radius:10px;font-size:1.1em;
                            font-weight:600;cursor:pointer;margin-top:10px">
-              Speichern
+              {t("btn.save")}
             </button>
           </form>
         """
@@ -214,7 +218,7 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
         f'</iframe>'
     )
 
-    # --- Paid-Button ---
+    # --- Paid button ---
     paid_button = ""
     if not is_paid:
         paid_button = f"""
@@ -223,20 +227,20 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
                       style="width:100%;padding:14px;background:#ef6c00;color:#fff;
                              border:none;border-radius:10px;font-size:1.1em;
                              font-weight:600;cursor:pointer">
-                Als bezahlt markieren
+                {t("btn.mark_paid")}
               </button>
             </form>
         """
 
     # --- QR ---
-    qr_svg = generate_epc_qr_svg(info) if not is_paid else generate_dummy_qr_svg()
+    qr_svg = generate_qr_svg(info) if info.is_payable and not is_paid else generate_dummy_svg() if is_paid else ""
 
     html = f"""<!DOCTYPE html>
-<html lang="de">
+<html lang="{locale}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{info.title or "Zahlung"}</title>
+  <title>{info.title or t("page.payment")}</title>
   <style>
     * {{ margin:0; padding:0; box-sizing:border-box; }}
     body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -255,7 +259,7 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
 <body>
   <div class="container">
     <div class="left">
-      <h1 style="font-size:1.3em;margin-bottom:12px">{info.title or "Dokument"}</h1>
+      <h1 style="font-size:1.3em;margin-bottom:12px">{info.title or t("page.document")}</h1>
       {status_badge}{edit_badge}
 
       {banner}
@@ -267,25 +271,25 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
       <div style="{'opacity:.45;pointer-events:none' if is_paid else ''}">
 
         <div style="margin-bottom:14px">
-          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">Zahlungsempfänger</div>
-          <span style="font-size:1.05em;font-weight:600">{info.correspondent or "–"}</span>
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">{t("label.payee")}</div>
+          <span style="font-size:1.05em;font-weight:600">{info.correspondent_name or "–"}</span>
         </div>
 
         <div style="margin-bottom:14px">
-          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">IBAN</div>
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">{t("label.iban")}</div>
           {iban_field}
         </div>
 
         {bic_block}
 
         <div style="margin-bottom:14px">
-          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">Betrag</div>
-          {betrag_field}
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">{t("label.amount")}</div>
+          {amount_field}
         </div>
 
         <div style="margin-bottom:14px">
-          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">Verwendungszweck</div>
-          {verwendungszweck_field}
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">{t("label.remittance")}</div>
+          {remittance_field}
         </div>
 
       </div>
@@ -308,19 +312,19 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
 
 @app.get(f"{base}/healthz")
 async def healthz():
-    return {"ok": True, "enable_edit": settings.enable_edit}
+    return {"ok": True, "enable_edit": settings.enable_edit, "language": settings.language}
 
 
 @app.get(f"{base}/doc/{{doc_id}}", response_class=HTMLResponse)
 async def get_document_page(doc_id: int, request: Request):
-    """Zeigt die Zahlungsseite für ein Dokument."""
+    """Display the payment page for a document."""
     client = _get_client(request)
     cookie = _get_cookie(request)
     ua = _get_ua(request)
 
     if not cookie:
         return HTMLResponse(
-            content="<h1>Nicht eingeloggt</h1><p>Bitte zuerst bei Paperless einloggen.</p>",
+            content=f"<h1>{t('error.not_logged_in_title')}</h1><p>{t('error.not_logged_in_body')}</p>",
             status_code=401,
         )
 
@@ -330,41 +334,27 @@ async def get_document_page(doc_id: int, request: Request):
         status = exc.response.status_code
         if status in (401, 403):
             return HTMLResponse(
-                content="<h1>Nicht authentifiziert</h1><p>Session abgelaufen? Bitte neu einloggen.</p>",
+                content=f"<h1>{t('error.not_authenticated_title')}</h1><p>{t('error.not_authenticated_body')}</p>",
                 status_code=401,
             )
         if status == 404:
             return HTMLResponse(
-                content=f"<h1>Nicht gefunden</h1><p>Dokument {doc_id} existiert nicht.</p>",
+                content=f"<h1>{t('error.not_found_title')}</h1><p>{t('error.not_found_body', doc_id=doc_id)}</p>",
                 status_code=404,
             )
-        logger.error("Upstream-Fehler: %s", exc)
+        logger.error("Upstream error: %s", exc)
         return HTMLResponse(
-            content=f"<h1>Fehler</h1><p>Paperless meldet Status {status}.</p>",
+            content=f"<h1>{t('error.upstream_title')}</h1><p>{t('error.upstream_body', status=status)}</p>",
             status_code=502,
         )
     except (httpx.ConnectError, httpx.TimeoutException) as exc:
-        logger.error("Verbindungsfehler: %s", exc)
+        logger.error("Connection error: %s", exc)
         return HTMLResponse(
-            content="<h1>Verbindungsfehler</h1><p>Paperless nicht erreichbar.</p>",
+            content=f"<h1>{t('error.connection_title')}</h1><p>{t('error.connection_body')}</p>",
             status_code=502,
         )
 
-    # QR-Code generieren
-    if info.bezahlt:
-        qr_svg = generate_dummy_svg()
-    elif info.is_payable:
-        try:
-            qr_svg = generate_qr_svg(info)
-        except ValueError as exc:
-            logger.warning("QR-Generierung fehlgeschlagen: %s", exc)
-            qr_svg = ""
-    else:
-        qr_svg = ""
-
-    pdf_url = _pdf_url(doc_id)
     html = _render_page(info, doc_id, error="", save_ok=False)
-
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
@@ -374,46 +364,48 @@ async def save_document_fields(
     request: Request,
     iban: str = Form(""),
     bic: str = Form(""),
-    betrag: str = Form(""),
-    verwendungszweck: str = Form(""),
+    amount: str = Form(""),
+    remittance: str = Form(""),
 ):
-    """Speichert geänderte Custom Fields (experimentell, nur wenn ENABLE_EDIT=true)."""
+    """Save changed custom fields (experimental, only when ENABLE_EDIT=true)."""
     if not settings.enable_edit:
-        return HTMLResponse("<h1>Nicht erlaubt</h1><p>Feldbearbeitung ist deaktiviert.</p>", status_code=403)
+        return HTMLResponse(
+            f"<h1>{t('error.edit_disabled_title')}</h1><p>{t('error.edit_disabled_body')}</p>",
+            status_code=403,
+        )
 
     client = _get_client(request)
     cookie = _get_cookie(request)
     ua = _get_ua(request)
 
     if not cookie:
-        return JSONResponse({"error": "Nicht eingeloggt"}, status_code=401)
+        return JSONResponse({"error": t("error.not_logged_in_title")}, status_code=401)
 
-    # IBAN validieren (wenn angegeben)
+    # Validate IBAN (if provided)
     iban_clean = iban.replace(" ", "").replace("-", "").upper()
     if iban_clean:
         iban_result = validate_iban(iban_clean)
         if not iban_result.valid:
-            # Seite mit Fehler neu rendern
+            # Re-render page with error
             try:
                 info = await build_payment_info(client, doc_id, cookie, ua)
             except Exception:
-                return HTMLResponse(f"<h1>Fehler</h1><p>IBAN ungültig: {iban_result.error}</p>", status_code=400)
+                return HTMLResponse(
+                    f"<h1>{t('error.upstream_title')}</h1><p>{t('msg.iban_invalid')}: {iban_result.error}</p>",
+                    status_code=400,
+                )
 
-            qr_svg = ""
-            if info.is_payable:
-                try:
-                    qr_svg = generate_qr_svg(info)
-                except ValueError:
-                    pass
-            pdf_url = _pdf_url(doc_id)
-            html = _render_page(info, doc_id, error=f"IBAN ungültig: {iban_result.error}")
+            html = _render_page(info, doc_id, error=f"{t('msg.iban_invalid')}: {iban_result.error}")
             return HTMLResponse(content=html, status_code=400)
 
-    # Updates zusammenbauen
+    # Build updates
     try:
         info = await build_payment_info(client, doc_id, cookie, ua)
     except httpx.HTTPStatusError as exc:
-        return HTMLResponse(f"<h1>Fehler</h1><p>Status {exc.response.status_code}</p>", status_code=502)
+        return HTMLResponse(
+            f"<h1>{t('error.upstream_title')}</h1><p>{t('error.upstream_body', status=exc.response.status_code)}</p>",
+            status_code=502,
+        )
 
     updates: dict[int, object] = {}
     if iban_clean != (info.iban or "").replace(" ", "").upper():
@@ -421,17 +413,17 @@ async def save_document_fields(
     if bic.strip() != (info.bic or ""):
         if settings.cf_bic:
             updates[settings.cf_bic] = bic.strip()
-    if betrag.strip():
+    if amount.strip():
         try:
             from decimal import Decimal
-            new_betrag = Decimal(betrag.strip())
-            if new_betrag != info.betrag:
-                # Paperless erwartet den Betrag als String im Currency-Format
-                updates[settings.cf_betrag] = f"EUR{new_betrag:.2f}"
+            new_amount = Decimal(amount.strip())
+            if new_amount != info.amount:
+                # Paperless expects the amount as a string in currency format
+                updates[settings.cf_amount] = f"EUR{new_amount:.2f}"
         except Exception:
             pass
-    if verwendungszweck.strip() != (info.verwendungszweck or ""):
-        updates[settings.cf_verwendungszweck] = verwendungszweck.strip()
+    if remittance.strip() != (info.remittance or ""):
+        updates[settings.cf_remittance] = remittance.strip()
 
     if not updates:
         return RedirectResponse(url=f"{base}/doc/{doc_id}", status_code=303)
@@ -441,33 +433,36 @@ async def save_document_fields(
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status in (401, 403):
-            return HTMLResponse("<h1>Nicht authentifiziert</h1>", status_code=401)
-        logger.error("Fehler beim Speichern: %s", exc)
-        return HTMLResponse(f"<h1>Fehler</h1><p>Paperless meldet Status {status}.</p>", status_code=502)
+            return HTMLResponse(f"<h1>{t('error.not_authenticated_title')}</h1>", status_code=401)
+        logger.error("Error saving fields: %s", exc)
+        return HTMLResponse(
+            f"<h1>{t('error.upstream_title')}</h1><p>{t('error.upstream_body', status=status)}</p>",
+            status_code=502,
+        )
     except (httpx.ConnectError, httpx.TimeoutException) as exc:
-        logger.error("Verbindungsfehler: %s", exc)
-        return HTMLResponse("<h1>Verbindungsfehler</h1>", status_code=502)
+        logger.error("Connection error: %s", exc)
+        return HTMLResponse(f"<h1>{t('error.connection_title')}</h1>", status_code=502)
 
-    logger.info("✓ Dokument #%d – %d Feld(er) gespeichert", doc_id, len(updates))
+    logger.info("✓ Document #%d – %d field(s) saved", doc_id, len(updates))
     return RedirectResponse(url=f"{base}/doc/{doc_id}", status_code=303)
 
 
 @app.post(f"{base}/doc/{{doc_id}}/paid")
 async def mark_document_paid(doc_id: int, request: Request):
-    """Markiert ein Dokument als bezahlt."""
+    """Mark a document as paid."""
     client = _get_client(request)
     cookie = _get_cookie(request)
     ua = _get_ua(request)
 
     if not cookie:
-        return JSONResponse({"error": "Nicht eingeloggt"}, status_code=401)
+        return JSONResponse({"error": t("error.not_logged_in_title")}, status_code=401)
 
     try:
-        # Zuerst Current State laden um custom_fields zu haben
+        # Load current state to get custom_fields
         info = await build_payment_info(client, doc_id, cookie, ua)
 
-        if info.bezahlt:
-            # Bereits bezahlt – einfach redirect
+        if info.paid:
+            # Already paid – just redirect
             return RedirectResponse(
                 url=f"{base}/doc/{doc_id}",
                 status_code=303,
@@ -479,18 +474,18 @@ async def mark_document_paid(doc_id: int, request: Request):
         status = exc.response.status_code
         if status in (401, 403):
             return HTMLResponse(
-                content="<h1>Nicht authentifiziert</h1><p>Session abgelaufen?</p>",
+                content=f"<h1>{t('error.not_authenticated_title')}</h1><p>{t('error.not_authenticated_body')}</p>",
                 status_code=401,
             )
-        logger.error("Fehler beim Markieren: %s", exc)
+        logger.error("Error marking as paid: %s", exc)
         return HTMLResponse(
-            content=f"<h1>Fehler</h1><p>Paperless meldet Status {status}.</p>",
+            content=f"<h1>{t('error.upstream_title')}</h1><p>{t('error.upstream_body', status=status)}</p>",
             status_code=502,
         )
     except (httpx.ConnectError, httpx.TimeoutException) as exc:
-        logger.error("Verbindungsfehler: %s", exc)
+        logger.error("Connection error: %s", exc)
         return HTMLResponse(
-            content="<h1>Verbindungsfehler</h1><p>Paperless nicht erreichbar.</p>",
+            content=f"<h1>{t('error.connection_title')}</h1><p>{t('error.connection_body')}</p>",
             status_code=502,
         )
 
