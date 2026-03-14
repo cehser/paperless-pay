@@ -19,6 +19,7 @@ _locales_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "locales
 
 _i18n.set("load_path", [_locales_dir])
 _i18n.set("file_format", "json")
+_i18n.set("filename_format", "{locale}.{format}")
 _i18n.set("fallback", "en")
 _i18n.set("enable_memoization", True)
 
