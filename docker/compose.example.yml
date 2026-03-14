@@ -7,12 +7,12 @@
 #
 #   docker compose \
 #     -f docker-compose.yml \
-#     -f pay-poc/docker/compose.example.yml \
+#     -f pay/docker/compose.example.yml \
 #     up -d
 #
 # Prerequisites:
-#   - This repo as subdirectory "pay-poc/" in your Paperless compose dir
-#   - pay-poc/.env and pay-poc/.env.worker with the appropriate values
+#   - This repo as subdirectory "pay/" in your Paperless compose dir
+#   - pay/.env and pay/.env.worker with the appropriate values
 #     (see .env.sample and .env.worker.sample)
 #
 # For local development with a custom build, see README → Development.
@@ -21,21 +21,21 @@
 services:
   # --- Web app (payment page + QR code) ------------------------------------
   paperless-pay:
-    image: ghcr.io/eehser/paperless-pay:latest
+    image: ghcr.io/cehser/paperless-pay:latest
     # To build locally instead of using the image: uncomment the next line,
     # comment out "image:":
     # build:
-    #   context: ./pay-poc
-    env_file: pay-poc/.env
+    #   context: ./pay
+    env_file: pay/.env
     ports:
       - "8081:8080"
     restart: unless-stopped
 
   # --- Link worker (sets pay URLs in custom fields) ------------------------
   pay-link-worker:
-    image: ghcr.io/eehser/paperless-pay:latest
+    image: ghcr.io/cehser/paperless-pay:latest
     # build:
-    #   context: ./pay-poc
+    #   context: ./pay
     command: ["python", "-u", "worker.py"]
-    env_file: pay-poc/.env.worker
+    env_file: pay/.env.worker
     restart: unless-stopped
