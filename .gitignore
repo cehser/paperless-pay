@@ -6,10 +6,11 @@ dist/
 .venv/
 venv/
 
-# ENV (enthält Custom Field IDs und ggf. URLs)
+# ENV (contains custom field IDs, tokens, URLs)
 .env
+.env.worker
 
-# Interne Planung
+# Internal planning
 PLAN.md
 
 # IDE

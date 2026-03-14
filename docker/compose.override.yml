@@ -7,7 +7,7 @@
 #
 #   docker compose \
 #     -f docker-compose.yml \
-#     -f pay-poc/docker-compose.pay.example.yml \
+#     -f pay-poc/docker/compose.override.yml \
 #     up -d
 #
 # Prerequisites:
@@ -21,7 +21,7 @@
 services:
   # --- Web app (payment page + QR code) ------------------------------------
   paperless-pay:
-    image: ghcr.io/eehser/paperless-pay:latest
+    image: ghcr.io/cehser/paperless-pay:latest
     # To build locally instead of using the image: uncomment the next line,
     # comment out "image:":
     # build:
@@ -33,7 +33,7 @@ services:
 
   # --- Link worker (sets pay URLs in custom fields) ------------------------
   pay-link-worker:
-    image: ghcr.io/eehser/paperless-pay:latest
+    image: ghcr.io/cehser/paperless-pay:latest
     # build:
     #   context: ./pay-poc
     command: ["python", "-u", "worker.py"]

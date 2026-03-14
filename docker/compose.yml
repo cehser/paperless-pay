@@ -7,7 +7,7 @@
 #
 #   docker compose \
 #     -f docker-compose.yml \
-#     -f pay/docker-compose.pay.yml \
+#     -f pay/docker/compose.yml \
 #     up -d --build pay
 #
 # The default network of the Paperless stack is shared automatically.

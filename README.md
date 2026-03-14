@@ -43,11 +43,11 @@ cp pay-poc/.env.worker.sample pay-poc/.env.worker
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay.example.yml \
+  -f pay-poc/docker/compose.example.yml \
   up -d
 ```
 
-> The compose file `docker-compose.pay.example.yml` is an **example**.
+> The compose file `docker/compose.example.yml` is an **example**.
 > Adapt it to your setup (service names, networks, ports).
 
 ### 4. Test
@@ -80,11 +80,11 @@ ghcr.io/eehser/paperless-pay:latest
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay.example.yml \
+  -f pay-poc/docker/compose.example.yml \
   pull && \
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay.example.yml \
+  -f pay-poc/docker/compose.example.yml \
   up -d
 ```
 
@@ -104,7 +104,7 @@ The web app and the link worker use **separate env files** for security
 
 See [.env.sample](.env.sample) and [.env.worker.sample](.env.worker.sample).
 
-### Web App
+### Web App (``.env``)
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
@@ -139,7 +139,7 @@ See [.env.sample](.env.sample) and [.env.worker.sample](.env.worker.sample).
 
 ## nginx
 
-See [nginx.example.conf](nginx.example.conf) – paperless-pay and Paperless must run
+See [docker/nginx.example.conf](docker/nginx.example.conf) – paperless-pay and Paperless must run
 behind the same reverse proxy so the browser sends session cookies to both paths.
 
 ## Routes
@@ -159,18 +159,18 @@ behind the same reverse proxy so the browser sends session cookies to both paths
 # Instead of pulling from GHCR: build locally
 docker compose \
   -f docker-compose.yml \
-  -f pay-poc/docker-compose.pay.example.yml \
+  -f pay-poc/docker/compose.example.yml \
   up -d --build
 ```
 
-Uncomment the `build:` lines and comment out `image:` in `docker-compose.pay.example.yml`.
+Uncomment the `build:` lines and comment out `image:` in `docker/compose.example.yml`.
 
 ### Without Docker
 
 ```bash
-cd pay-poc/
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
+cd pay-poc/src
+python -m venv ../.venv
+../.venv/bin/pip install -r requirements.txt
 # Load .env (e.g. via direnv or manual export)
 uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 ```

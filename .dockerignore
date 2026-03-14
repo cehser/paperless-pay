@@ -1,4 +1,4 @@
-# Build-Artefakte
+# Build artifacts
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -8,6 +8,7 @@ venv/
 
 # Secrets
 .env
+.env.worker
 
 # Git / IDE
 .git/
@@ -17,14 +18,13 @@ venv/
 .idea/
 *.swp
 
-# Docs (nicht im Image nötig)
+# Docs (not needed in image)
 README.md
 PLAN.md
 LICENSE
 *.md
 
-# Compose + nginx (Beispieldateien, nicht Teil der App)
-docker-compose*.yml
-nginx.example.conf
+# Docker / deploy examples (not part of the app image)
+docker/
 Dockerfile*
 .dockerignore

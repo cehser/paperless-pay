@@ -7,12 +7,12 @@ LABEL org.opencontainers.image.title="paperless-pay" \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY src/ .
 
 EXPOSE 8080
 
-# Default: Web-App. Für den Link-Worker mit command: überschreiben.
+# Default: web app. Override with command: for the link worker.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "info"]
