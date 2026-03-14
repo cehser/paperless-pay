@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# ENV (contains custom field IDs, tokens, URLs)
+.env
+.env.worker
+
+# Internal planning
+PLAN.md
+
+# IDE
+.vscode/
+.idea/
+*.swp

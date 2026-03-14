@@ -1,0 +1,53 @@
+{
+  "de": {
+    "status": {
+      "paid": "BEZAHLT",
+      "open": "OFFEN",
+      "edit": "BERABEITEN"
+    },
+    "label": {
+      "payee": "Zahlungsempfänger",
+      "iban": "IBAN",
+      "bic": "BIC",
+      "amount": "Betrag",
+      "remittance": "Verwendungszweck"
+    },
+    "btn": {
+      "save": "Speichern",
+      "edit": "Bearbeiten",
+      "cancel": "Abbrechen",
+      "mark_paid": "Als bezahlt markieren"
+    },
+    "msg": {
+      "saved": "Gespeichert ✓",
+      "iban_valid": "IBAN gültig",
+      "iban_invalid": "IBAN ungültig",
+      "iban_empty": "IBAN ist leer"
+    },
+    "page": {
+      "payment": "Zahlung",
+      "document": "Dokument"
+    },
+    "error": {
+      "not_logged_in_title": "Nicht eingeloggt",
+      "not_logged_in_body": "Bitte zuerst bei Paperless einloggen.",
+      "not_authenticated_title": "Nicht authentifiziert",
+      "not_authenticated_body": "Session abgelaufen? Bitte neu einloggen.",
+      "not_found_title": "Nicht gefunden",
+      "not_found_body": "Dokument %{doc_id} existiert nicht.",
+      "upstream_title": "Fehler",
+      "upstream_body": "Paperless meldet Status %{status}.",
+      "connection_title": "Verbindungsfehler",
+      "connection_body": "Paperless nicht erreichbar.",
+      "edit_disabled_title": "Nicht erlaubt",
+      "edit_disabled_body": "Feldbearbeitung ist deaktiviert."
+    },
+    "qr": {
+      "paid_text": "BEZAHLT"
+    },
+    "field": {
+      "amount": "Betrag",
+      "correspondent": "Korrespondent"
+    }
+  }
+}

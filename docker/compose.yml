@@ -1,0 +1,30 @@
+# ==========================================================================
+# paperless-pay  (additive to your paperless-ngx compose)
+# ==========================================================================
+#
+# Clone this repo as subdirectory "pay/" in your
+# Paperless compose directory, then start with:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f pay/docker/compose.yml \
+#     up -d --build pay
+#
+# The default network of the Paperless stack is shared automatically.
+# ==========================================================================
+
+services:
+  pay:
+    build:
+      context: ./pay
+    env_file: pay/.env
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  pay-link-worker:
+    build:
+      context: ./pay
+      dockerfile: Dockerfile.worker
+    env_file: pay/.env.worker
+    restart: unless-stopped

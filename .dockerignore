@@ -1,0 +1,30 @@
+# Build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Secrets
+.env
+.env.worker
+
+# Git / IDE
+.git/
+.gitignore
+.github/
+.vscode/
+.idea/
+*.swp
+
+# Docs (not needed in image)
+README.md
+PLAN.md
+LICENSE
+*.md
+
+# Docker / deploy examples (not part of the app image)
+docker/
+Dockerfile*
+.dockerignore

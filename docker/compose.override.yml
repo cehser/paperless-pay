@@ -1,0 +1,41 @@
+# ==========================================================================
+# paperless-pay – Example Compose Override
+# ==========================================================================
+#
+# This file is an EXAMPLE and must be adapted to your setup.
+# It is used additively with your existing paperless-ngx compose file:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f pay-poc/docker/compose.override.yml \
+#     up -d
+#
+# Prerequisites:
+#   - This repo as subdirectory "pay-poc/" in your Paperless compose dir
+#   - pay-poc/.env and pay-poc/.env.worker with the appropriate values
+#     (see .env.sample and .env.worker.sample)
+#
+# For local development with a custom build, see README → Development.
+# ==========================================================================
+
+services:
+  # --- Web app (payment page + QR code) ------------------------------------
+  paperless-pay:
+    image: ghcr.io/cehser/paperless-pay:latest
+    # To build locally instead of using the image: uncomment the next line,
+    # comment out "image:":
+    # build:
+    #   context: ./pay-poc
+    env_file: pay-poc/.env
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+  # --- Link worker (sets pay URLs in custom fields) ------------------------
+  pay-link-worker:
+    image: ghcr.io/cehser/paperless-pay:latest
+    # build:
+    #   context: ./pay-poc
+    command: ["python", "-u", "worker.py"]
+    env_file: pay-poc/.env.worker
+    restart: unless-stopped
