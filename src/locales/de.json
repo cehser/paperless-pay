@@ -3,7 +3,7 @@
     "status": {
       "paid": "BEZAHLT",
       "open": "OFFEN",
-      "edit": "EDIT"
+      "edit": "BERABEITEN"
     },
     "label": {
       "payee": "Zahlungsempfänger",
@@ -14,6 +14,8 @@
     },
     "btn": {
       "save": "Speichern",
+      "edit": "Bearbeiten",
+      "cancel": "Abbrechen",
       "mark_paid": "Als bezahlt markieren"
     },
     "msg": {

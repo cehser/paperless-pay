@@ -121,10 +121,12 @@ def _render_field_editable(label: str, name: str, value: str, extra_html: str = 
     </div>"""
 
 
-def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool = False) -> str:
+def _render_page(info: PaymentInfo, doc_id: int, error: str = "",
+                 save_ok: bool = False, editing: bool = False) -> str:
     """Render the payment page as HTML."""
     is_paid = info.paid is True
-    editable = settings.enable_edit and not is_paid
+    can_edit = settings.enable_edit and not is_paid
+    editable = can_edit and editing
     iban_result = validate_iban(info.iban) if info.iban else None
     remittance_display = render_remittance(info)
     public_base = settings.paperless_public_url or settings.paperless_base_url
@@ -145,6 +147,26 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
         'font-size:.75em;font-weight:600;background:#e3f2fd;color:#1565c0'
         f'">{t("status.edit")}</span>' if editable else ""
     )
+
+    # --- Edit / Cancel button (only when editing is allowed) ---
+    edit_button = ""
+    if can_edit and not editable:
+        edit_button = (
+            f'<a href="{settings.app_base_path}/doc/{doc_id}?edit=1"'
+            f' style="display:inline-block;margin-top:14px;padding:10px 24px;'
+            f'background:#1565c0;color:#fff;border-radius:10px;font-size:1em;'
+            f'font-weight:600;text-decoration:none;text-align:center">'
+            f'{t("btn.edit")}</a>'
+        )
+    cancel_button = ""
+    if editable:
+        cancel_button = (
+            f'<a href="{settings.app_base_path}/doc/{doc_id}"'
+            f' style="display:block;width:100%;padding:14px;margin-top:8px;'
+            f'background:#78909c;color:#fff;border-radius:10px;font-size:1.1em;'
+            f'font-weight:600;text-decoration:none;text-align:center">'
+            f'{t("btn.cancel")}</a>'
+        )
 
     iban_display = info.iban or "–"
     iban_hint = ""
@@ -209,6 +231,7 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
               {t("btn.save")}
             </button>
           </form>
+          {cancel_button}
         """
 
     # --- PDF embed ---
@@ -296,6 +319,7 @@ def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool 
 
       {form_close}
       {paid_button}
+      {edit_button}
     </div>
     <div class="right">
       {pdf_frame}
@@ -354,7 +378,8 @@ async def get_document_page(doc_id: int, request: Request):
             status_code=502,
         )
 
-    html = _render_page(info, doc_id, error="", save_ok=False)
+    html = _render_page(info, doc_id, error="", save_ok=False,
+                        editing=request.query_params.get("edit") == "1")
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
 
