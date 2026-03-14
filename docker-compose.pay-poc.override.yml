@@ -20,7 +20,7 @@
 services:
   # --- Web-App (Zahlungsseite + QR-Code) -----------------------------------
   paperless-pay:
-    image: ghcr.io/cehser/paperless-pay:latest
+    image: ghcr.io/eehser/paperless-pay:latest
     # Zum selber bauen statt Image: die nächste Zeile einkommentieren,
     # "image:" auskommentieren:
     # build:
@@ -32,7 +32,7 @@ services:
 
   # --- Link-Worker (setzt Pay-URLs in Custom Fields) -----------------------
   pay-link-worker:
-    image: ghcr.io/cehser/paperless-pay:latest
+    image: ghcr.io/eehser/paperless-pay:latest
     # build:
     #   context: ./pay-poc
     command: ["python", "-u", "worker.py"]

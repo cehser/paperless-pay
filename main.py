@@ -118,157 +118,188 @@ def _render_field_editable(label: str, name: str, value: str, extra_html: str = 
     </div>"""
 
 
-def _render_page(
-    info,
-    qr_svg: str,
-    pdf_url: str,
-    error: str = "",
-    success: str = "",
-) -> str:
-    """Rendert die Dokument-Zahlungsseite als HTML."""
-
-    editable = settings.enable_edit and not info.bezahlt
-
-    # Verwendungszweck mit Template rendern
+def _render_page(info: PaymentInfo, doc_id: int, error: str = "", save_ok: bool = False) -> str:
+    """Render the payment page as HTML."""
+    is_paid = info.bezahlt is True
+    editable = settings.enable_edit and not is_paid
+    iban_result = validate_iban(info.iban) if info.iban else None
     verwendungszweck_display = render_verwendungszweck(info)
+    public_base = settings.paperless_public_url or settings.paperless_base_url
 
-    # IBAN-Validierung
-    iban_hint = _iban_hint(info.iban)
+    # --- Optionale Felder: nur anzeigen wenn CF konfiguriert ---
+    show_bic = settings.cf_bic is not None
 
-    # Zahlungsfelder
-    if info.bezahlt:
-        status_badge = '<span class="badge badge--paid">BEZAHLT</span>'
-        field_class = "field--disabled"
-        pay_button = ""
-    else:
-        status_badge = '<span class="badge badge--open">OFFEN</span>'
-        field_class = ""
-        pay_button = f"""
-        <form method="post" action="{base}/doc/{info.doc_id}/paid" class="mt">
-            <button type="submit" class="btn btn--pay">Als bezahlt markieren</button>
-        </form>"""
+    status_badge = (
+        '<span style="display:inline-block;padding:6px 18px;border-radius:12px;'
+        'font-size:.95em;font-weight:600;'
+        f'{"background:#e8f5e9;color:#2e7d32" if is_paid else "background:#fff3e0;color:#e65100"}'
+        f'">{"BEZAHLT" if is_paid else "OFFEN"}</span>'
+    )
 
-    missing_html = ""
-    if not info.bezahlt and not info.is_payable:
-        missing = ", ".join(info.missing_fields)
-        missing_html = f'<div class="alert alert--warn">Fehlende Felder für QR-Code: {missing}</div>'
+    edit_badge = (
+        ' <span style="display:inline-block;padding:3px 10px;border-radius:8px;'
+        'font-size:.75em;font-weight:600;background:#e3f2fd;color:#1565c0'
+        '">EDIT</span>' if editable else ""
+    )
 
-    error_html = f'<div class="alert alert--error">{error}</div>' if error else ""
-    success_html = f'<div class="alert alert--ok">{success}</div>' if success else ""
+    iban_display = info.iban or "–"
+    iban_hint = ""
+    if info.iban and iban_result:
+        if iban_result.valid:
+            iban_display = iban_result.formatted
+            iban_hint = ' <span style="color:#2e7d32" title="IBAN gültig">✓</span>'
+        else:
+            iban_hint = f' <span style="color:#c62828" title="{iban_result.error}">✗ {iban_result.error}</span>'
 
-    betrag_raw = f"{info.betrag:.2f}" if info.betrag else ""
-    betrag_display = f"{betrag_raw} EUR" if betrag_raw else "–"
-
-    # Felder rendern (readonly vs. editable)
+    # --- Felder-Rendering ---
     if editable:
-        fields_html = "".join([
-            _render_field_readonly("Zahlungsempfänger", info.correspondent_name or "–"),
-            _render_field_editable("IBAN", "iban", info.iban, extra_html=iban_hint),
-            _render_field_editable("BIC", "bic", info.bic),
-            _render_field_editable("Betrag (EUR)", "betrag", betrag_raw, input_type="number", step="0.01"),
-            _render_field_editable("Verwendungszweck", "verwendungszweck", info.verwendungszweck),
-        ])
-        edit_form_open = f'<form method="post" action="{base}/doc/{info.doc_id}/save">'
-        save_button = '<button type="submit" class="btn btn--save">Speichern</button>'
-        edit_form_close = "</form>"
-        edit_badge = '<span class="badge badge--edit">EDIT</span> '
+        iban_field = (
+            f'<input type="text" name="iban" value="{info.iban or ""}" '
+            f'style="width:100%;padding:6px;font-size:1.05em;font-family:monospace">'
+            f'{iban_hint}'
+        )
+        bic_field = (
+            f'<input type="text" name="bic" value="{info.bic or ""}" '
+            f'style="width:100%;padding:6px;font-size:1.05em">'
+        ) if show_bic else ""
+        betrag_field = (
+            f'<input type="text" name="betrag" value="{info.betrag or ""}" '
+            f'style="width:100%;padding:6px;font-size:1.05em">'
+        )
+        verwendungszweck_field = (
+            f'<input type="text" name="verwendungszweck" value="{info.verwendungszweck or ""}" '
+            f'style="width:100%;padding:6px;font-size:1.05em">'
+        )
     else:
-        fields_html = "".join([
-            _render_field_readonly("Zahlungsempfänger", info.correspondent_name or "–", css=field_class),
-            _render_field_readonly("IBAN", info.iban or "–", extra_html=iban_hint, css=field_class),
-            _render_field_readonly("BIC", info.bic or "–", css=field_class),
-            _render_field_readonly("Betrag", betrag_display, css=field_class),
-            _render_field_readonly("Verwendungszweck", verwendungszweck_display or "–", css=field_class),
-        ])
-        edit_form_open = ""
-        save_button = ""
-        edit_form_close = ""
-        edit_badge = ""
+        iban_field = f'<span style="font-family:monospace;font-size:1.05em">{iban_display}</span>{iban_hint}'
+        bic_field = f'<span style="font-size:1.05em">{info.bic or "–"}</span>' if show_bic else ""
+        betrag_field = f'<span style="font-size:1.05em">{info.betrag or "–"} EUR</span>'
+        verwendungszweck_field = f'<span style="font-size:1.05em">{verwendungszweck_display or "–"}</span>'
 
-    return f"""<!DOCTYPE html>
+    # --- BIC-Block (nur wenn konfiguriert) ---
+    bic_block = ""
+    if show_bic:
+        bic_block = f"""
+            <div style="margin-bottom:14px">
+              <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">BIC</div>
+              {bic_field}
+            </div>
+        """
+
+    # --- Error/Success Banner ---
+    banner = ""
+    if error:
+        banner = f'<div style="background:#ffebee;color:#c62828;padding:12px;border-radius:8px;margin-bottom:16px">{error}</div>'
+    if save_ok:
+        banner = '<div style="background:#e8f5e9;color:#2e7d32;padding:12px;border-radius:8px;margin-bottom:16px">Gespeichert ✓</div>'
+
+    # --- Form wrapper (nur im Edit-Modus) ---
+    form_open = f'<form method="post" action="{settings.app_base_path}/doc/{doc_id}/save">' if editable else ""
+    form_close = ""
+    if editable:
+        form_close = """
+            <button type="submit"
+                    style="width:100%;padding:14px;background:#43a047;color:#fff;
+                           border:none;border-radius:10px;font-size:1.1em;
+                           font-weight:600;cursor:pointer;margin-top:10px">
+              Speichern
+            </button>
+          </form>
+        """
+
+    # --- PDF embed ---
+    pdf_url = f"{public_base}/api/documents/{doc_id}/preview/"
+    pdf_frame = (
+        f'<iframe src="{pdf_url}" style="width:100%;height:100%;border:none;border-radius:12px">'
+        f'</iframe>'
+    )
+
+    # --- Paid-Button ---
+    paid_button = ""
+    if not is_paid:
+        paid_button = f"""
+            <form method="post" action="{settings.app_base_path}/doc/{doc_id}/paid" style="margin-top:18px">
+              <button type="submit"
+                      style="width:100%;padding:14px;background:#ef6c00;color:#fff;
+                             border:none;border-radius:10px;font-size:1.1em;
+                             font-weight:600;cursor:pointer">
+                Als bezahlt markieren
+              </button>
+            </form>
+        """
+
+    # --- QR ---
+    qr_svg = generate_epc_qr_svg(info) if not is_paid else generate_dummy_qr_svg()
+
+    html = f"""<!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{info.title} – paperless-pay</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-               background: #f4f5f7; color: #1a1a1a; }}
-        .container {{ max-width: 1200px; margin: 0 auto; padding: 1.5rem; }}
-        h1 {{ font-size: 1.4rem; margin-bottom: 1rem; color: #333; }}
-        .layout {{ display: grid; grid-template-columns: 380px 1fr; gap: 1.5rem; align-items: start; }}
-        @media (max-width: 800px) {{ .layout {{ grid-template-columns: 1fr; }} }}
-
-        .card {{ background: #fff; border-radius: 8px; padding: 1.5rem;
-                 box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
-        .qr-wrap {{ text-align: center; margin-bottom: 1rem; }}
-        .qr-wrap svg {{ max-width: 240px; height: auto; }}
-        .badge {{ display: inline-block; padding: .25rem .75rem; border-radius: 4px;
-                  font-size: .85rem; font-weight: 600; margin-bottom: .5rem; }}
-        .badge--paid {{ background: #d4edda; color: #155724; }}
-        .badge--open {{ background: #fff3cd; color: #856404; }}
-        .badge--edit {{ background: #cce5ff; color: #004085; }}
-
-        .fields {{ margin-bottom: 1rem; }}
-        .field {{ margin-bottom: .75rem; }}
-        .field label {{ display: block; font-size: .75rem; text-transform: uppercase;
-                        color: #666; margin-bottom: .15rem; letter-spacing: .03em; }}
-        .field .value {{ font-size: 1rem; font-weight: 500; }}
-        .field--disabled .value {{ color: #aaa; text-decoration: line-through; }}
-
-        .input {{ width: 100%; padding: .45rem .6rem; font-size: 1rem; font-weight: 500;
-                  border: 1px solid #cbd5e0; border-radius: 4px; font-family: inherit; }}
-        .input:focus {{ outline: none; border-color: #17a2b8; box-shadow: 0 0 0 2px rgba(23,162,184,.2); }}
-
-        .hint {{ font-size: .8rem; margin-top: .2rem; }}
-        .hint--ok {{ color: #155724; }}
-        .hint--err {{ color: #c0392b; }}
-
-        .btn {{ display: inline-block; padding: .6rem 1.2rem; border: none; border-radius: 6px;
-                font-size: 1rem; cursor: pointer; font-weight: 600; }}
-        .btn--pay {{ background: #17a2b8; color: #fff; width: 100%; }}
-        .btn--pay:hover {{ background: #138496; }}
-        .btn--save {{ background: #28a745; color: #fff; width: 100%; margin-bottom: .5rem; }}
-        .btn--save:hover {{ background: #218838; }}
-        .mt {{ margin-top: .5rem; }}
-
-        .alert {{ padding: .75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: .9rem; }}
-        .alert--warn {{ background: #fff3cd; color: #856404; }}
-        .alert--error {{ background: #f8d7da; color: #721c24; }}
-        .alert--ok {{ background: #d4edda; color: #155724; }}
-
-        .pdf-frame {{ background: #fff; border-radius: 8px; overflow: hidden;
-                      box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
-        .pdf-frame iframe {{ width: 100%; height: 80vh; border: none; }}
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{info.title or "Zahlung"}</title>
+  <style>
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+           background:#f5f5f5; color:#263238; }}
+    .container {{ display:flex; height:100vh; }}
+    .left {{ width:420px; min-width:380px; padding:28px; overflow-y:auto;
+             background:#fff; box-shadow:2px 0 12px rgba(0,0,0,.06); }}
+    .right {{ flex:1; padding:16px; }}
+    @media (max-width:900px) {{
+      .container {{ flex-direction:column; height:auto; }}
+      .left {{ width:100%; min-width:auto; }}
+      .right {{ height:70vh; }}
+    }}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>{info.title}</h1>
-        {error_html}{success_html}
-        <div class="layout">
-            <div class="card">
-                {edit_badge}{status_badge}
-                <div class="qr-wrap">
-                    {qr_svg}
-                </div>
-                {missing_html}
-                {edit_form_open}
-                <div class="fields">
-                    {fields_html}
-                </div>
-                {save_button}
-                {edit_form_close}
-                {pay_button}
-            </div>
-            <div class="pdf-frame">
-                <iframe src="{pdf_url}" title="Dokument-Vorschau"></iframe>
-            </div>
+  <div class="container">
+    <div class="left">
+      <h1 style="font-size:1.3em;margin-bottom:12px">{info.title or "Dokument"}</h1>
+      {status_badge}{edit_badge}
+
+      {banner}
+
+      {form_open}
+
+      <div style="margin:20px auto;text-align:center">{qr_svg}</div>
+
+      <div style="{'opacity:.45;pointer-events:none' if is_paid else ''}">
+
+        <div style="margin-bottom:14px">
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">Zahlungsempfänger</div>
+          <span style="font-size:1.05em;font-weight:600">{info.correspondent or "–"}</span>
         </div>
+
+        <div style="margin-bottom:14px">
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">IBAN</div>
+          {iban_field}
+        </div>
+
+        {bic_block}
+
+        <div style="margin-bottom:14px">
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">Betrag</div>
+          {betrag_field}
+        </div>
+
+        <div style="margin-bottom:14px">
+          <div style="font-size:.8em;color:#78909c;text-transform:uppercase;margin-bottom:2px">Verwendungszweck</div>
+          {verwendungszweck_field}
+        </div>
+
+      </div>
+
+      {form_close}
+      {paid_button}
     </div>
+    <div class="right">
+      {pdf_frame}
+    </div>
+  </div>
 </body>
 </html>"""
+    return html
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +363,7 @@ async def get_document_page(doc_id: int, request: Request):
         qr_svg = ""
 
     pdf_url = _pdf_url(doc_id)
-    html = _render_page(info, qr_svg, pdf_url)
+    html = _render_page(info, doc_id, error="", save_ok=False)
 
     return HTMLResponse(content=html, headers={"Cache-Control": "no-store"})
 
@@ -375,7 +406,7 @@ async def save_document_fields(
                 except ValueError:
                     pass
             pdf_url = _pdf_url(doc_id)
-            html = _render_page(info, qr_svg, pdf_url, error=f"IBAN ungültig: {iban_result.error}")
+            html = _render_page(info, doc_id, error=f"IBAN ungültig: {iban_result.error}")
             return HTMLResponse(content=html, status_code=400)
 
     # Updates zusammenbauen
